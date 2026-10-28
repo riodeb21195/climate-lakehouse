@@ -13,6 +13,19 @@ class Settings(BaseSettings):
     station_limit: int = Field(default=50, ge=0, description="0 means all stations")
     start_year: int = Field(default=1950, ge=1781, le=2100)
 
+    dwd_base_url: str = (
+        "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/daily/kl"
+    )
+    http_timeout_s: float = Field(default=30.0, gt=0)
+    http_max_retries: int = Field(default=5, ge=0)
+    http_requests_per_s: float = Field(default=5.0, gt=0)
+    download_workers: int = Field(default=4, ge=1, le=16)
+
+    s3_endpoint: str = "http://localhost:8333"
+    s3_bucket: str = "lakehouse"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+
     alert_channel: Literal["log", "slack"] = "log"
     slack_webhook_url: str = ""
 

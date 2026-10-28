@@ -4,16 +4,20 @@ version = "0.1.0"
 description = "Medallion lakehouse on Iceberg for German daily climate observations since 1950"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "boto3>=1.43.120",
+    "httpx>=0.28.1",
     "pydantic-settings>=2.16.2",
 ]
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]>=1.43.120",
     "mypy>=2.4.0",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.3",
+    "testcontainers>=4.15.0",
 ]
 
 [build-system]
