@@ -48,6 +48,11 @@ def test_parse_station_list_handles_fixed_width_and_latin1() -> None:
     assert by_id["04928"].state == "Baden-Württemberg"
     assert by_id["15194"].name == "Börßum-Achim"
     assert by_id["00003"].to_date == date(2011, 3, 31)
+    assert (by_id["01048"].height_m, by_id["01048"].latitude, by_id["01048"].longitude) == (
+        228,
+        51.1278,
+        13.7543,
+    )
 
 
 def test_parse_station_list_rejects_changed_header() -> None:
@@ -63,7 +68,7 @@ def test_parse_station_list_reports_bad_line() -> None:
 
 
 def _station(sid: str, state: str, start: int = 1950, end: int = 2026) -> Station:
-    return Station(sid, date(start, 1, 1), date(end, 10, 1), f"S{sid}", state)
+    return Station(sid, date(start, 1, 1), date(end, 10, 1), 0, 50.0, 10.0, f"S{sid}", state)
 
 
 def test_select_stations_round_robin_over_states() -> None:

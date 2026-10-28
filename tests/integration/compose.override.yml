@@ -1,0 +1,6 @@
+# Lets the test stack run next to a developer stack: random host ports, no fixed bindings.
+services:
+  seaweedfs:
+    ports: !override ["8333"]
+  lakekeeper:
+    ports: !reset []

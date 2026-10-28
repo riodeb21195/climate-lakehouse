@@ -12,6 +12,15 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      # Iceberg jars that the Spark unit tests resolve from Maven
+      - uses: actions/cache@v6
+        with:
+          path: ~/.ivy2.5.2
+          key: ivy-${{ hashFiles('src/climate_lakehouse/transform/spark.py') }}
       - run: uv sync --locked
       - name: Lint
         run: make lint

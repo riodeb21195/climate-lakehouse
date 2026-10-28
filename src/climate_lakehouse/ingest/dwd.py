@@ -23,8 +23,8 @@ _LISTING_ROW = re.compile(
     r'<a href="([^"/]+)">[^<]*</a>\s+(\d{2}-\w{3}-\d{4} \d{2}:\d{2}(?::\d{2})?)\s+(\d+)'
 )
 _STATION_IN_NAME = re.compile(r"^tageswerte_KL_(\d{5})_")
-# id, from, to, then height/lat/lon (skipped), then the free-text columns
-_STATION_ROW = re.compile(r"^(\d+) +(\d{8}) +(\d{8}) +-?\d+ +-?[\d.]+ +-?[\d.]+ (.*)$")
+# id, from, to, height, lat, lon, then the free-text columns
+_STATION_ROW = re.compile(r"^(\d+) +(\d{8}) +(\d{8}) +(-?\d+) +(-?[\d.]+) +(-?[\d.]+) (.*)$")
 
 
 class FormatError(ValueError):
@@ -40,8 +40,7 @@ class RemoteFile:
 
     @property
     def station_id(self) -> str | None:
-        match = _STATION_IN_NAME.match(self.name)
-        return match.group(1) if match else None
+        return station_id_from_name(self.name)
 
 
 @dataclass(frozen=True)
@@ -49,8 +48,16 @@ class Station:
     station_id: str
     from_date: date
     to_date: date
+    height_m: int
+    latitude: float
+    longitude: float
     name: str
     state: str
+
+
+def station_id_from_name(name: str) -> str | None:
+    match = _STATION_IN_NAME.match(name)
+    return match.group(1) if match else None
 
 
 def parse_listing(html: str, base_url: str) -> list[RemoteFile]:
@@ -80,7 +87,7 @@ def parse_station_list(text: str) -> list[Station]:
         if not line.strip():
             continue
         match = _STATION_ROW.match(line)
-        texts = re.split(r" {2,}", match.group(4).strip()) if match else []
+        texts = re.split(r" {2,}", match.group(7).strip()) if match else []
         if match is None or len(texts) < 2:
             raise FormatError(f"station list line {number} has an unexpected layout: {line!r}")
         stations.append(
@@ -88,6 +95,9 @@ def parse_station_list(text: str) -> list[Station]:
                 station_id=match.group(1).zfill(5),
                 from_date=_parse_yyyymmdd(match.group(2)),
                 to_date=_parse_yyyymmdd(match.group(3)),
+                height_m=int(match.group(4)),
+                latitude=float(match.group(5)),
+                longitude=float(match.group(6)),
                 name=texts[0],
                 state=texts[1],
             )
