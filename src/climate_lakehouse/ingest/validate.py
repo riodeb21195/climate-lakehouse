@@ -27,7 +27,7 @@ KL_COLUMNS = (
     "TGK",
     "eor",
 )
-_PRODUCT = re.compile(r"^produkt_klima_tag_\d{8}_\d{8}_(\d{5})\.txt$")
+PRODUCT_MEMBER = re.compile(r"^produkt_klima_tag_\d{8}_\d{8}_(\d{5})\.txt$")
 _GEOGRAPHY = re.compile(r"^Metadaten_Geographie_(\d{5})\.txt$")
 
 
@@ -42,10 +42,10 @@ def validate_kl_zip(name: str, content: bytes, station_id: str) -> None:
         raise FormatError(f"{name}: CRC error in member {broken}")
 
     members = archive.namelist()
-    products = [m for m in members if _PRODUCT.match(m)]
+    products = [m for m in members if PRODUCT_MEMBER.match(m)]
     if len(products) != 1:
         raise FormatError(f"{name}: expected exactly one produkt_klima_tag file, found {products}")
-    if _PRODUCT.match(products[0]).group(1) != station_id:  # type: ignore[union-attr]
+    if PRODUCT_MEMBER.match(products[0]).group(1) != station_id:  # type: ignore[union-attr]
         raise FormatError(f"{name}: product file {products[0]} belongs to another station")
     if not any(_GEOGRAPHY.match(m) for m in members):
         raise FormatError(f"{name}: Metadaten_Geographie file missing")

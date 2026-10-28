@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     s3_access_key: str = ""
     s3_secret_key: str = ""
 
+    catalog_uri: str = "http://localhost:8181/catalog"
+    warehouse: str = "climate"
+    spark_master: str = "local[*]"
+    spark_driver_memory: str = "1536m"
+    # Comma-separated local jar paths (baked into the Spark image); empty = resolve from Maven
+    spark_jars: str = ""
+    bronze_batch_files: int = Field(default=50, ge=1)
+    max_reject_ratio: float = Field(default=0.01, ge=0, le=1)
+
     alert_channel: Literal["log", "slack"] = "log"
     slack_webhook_url: str = ""
 

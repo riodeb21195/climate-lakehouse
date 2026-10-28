@@ -1,6 +1,8 @@
 """Raw zone on S3: files are stored byte-for-byte, with their source version as metadata."""
 
 import hashlib
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
 import boto3
@@ -14,10 +16,25 @@ if TYPE_CHECKING:
 RAW_PREFIX = "raw/dwd/daily_kl"
 
 
+@dataclass(frozen=True)
+class RawObject:
+    key: str
+    kind: str  # historical | recent | stations
+    sha256: str
+    source_modified_at: datetime
+    ingest_run_id: str
+
+
 class RawStore(Protocol):
     def is_current(self, key: str, remote: RemoteFile) -> bool: ...
 
     def put(self, key: str, body: bytes, remote: RemoteFile, run_id: str) -> None: ...
+
+
+class RawReader(Protocol):
+    def list_objects(self) -> list[RawObject]: ...
+
+    def get(self, key: str) -> bytes: ...
 
 
 class S3RawStore:
@@ -64,6 +81,35 @@ class S3RawStore:
             },
         )
 
+    def list_objects(self) -> list[RawObject]:
+        objects = []
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=f"{RAW_PREFIX}/"):
+            for item in page.get("Contents", []):
+                meta = self._client.head_object(Bucket=self._bucket, Key=item["Key"])["Metadata"]
+                objects.append(raw_object(item["Key"], meta))
+        return objects
+
+    def get(self, key: str) -> bytes:
+        return self._client.get_object(Bucket=self._bucket, Key=key)["Body"].read()
+
 
 def raw_key(kind: str, name: str) -> str:
     return f"{RAW_PREFIX}/{kind}/{name}"
+
+
+def raw_object(key: str, metadata: dict[str, str]) -> RawObject:
+    """Build a RawObject from the S3 user metadata written by `S3RawStore.put`."""
+    return RawObject(
+        key=key,
+        kind=key.removeprefix(f"{RAW_PREFIX}/").split("/", 1)[0],
+        sha256=metadata["sha256"],
+        source_modified_at=parse_listing_time(metadata["source-last-modified"]),
+        ingest_run_id=metadata["ingest-run-id"],
+    )
+
+
+def parse_listing_time(value: str) -> datetime:
+    """Parse the server listing time ("17-Jun-2026 10:15:08", seconds optional) as UTC."""
+    fmt = "%d-%b-%Y %H:%M:%S" if value.count(":") == 2 else "%d-%b-%Y %H:%M"
+    return datetime.strptime(value, fmt).replace(tzinfo=UTC)

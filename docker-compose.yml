@@ -81,6 +81,30 @@ services:
     restart: "no"
     mem_limit: 32m
 
+  # Batch jobs, started on demand: docker compose run --rm spark python -m <module>
+  spark:
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
+    image: climate-lakehouse-spark:local
+    profiles: ["jobs"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Inside the Docker network; .env holds the host-side addresses
+      S3_ENDPOINT: http://seaweedfs:8333
+      CATALOG_URI: http://lakekeeper:8181/catalog
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      WAREHOUSE: ${WAREHOUSE}
+      SPARK_DRIVER_MEMORY: 1536m
+    depends_on:
+      lakekeeper-bootstrap:
+        condition: service_completed_successfully
+    mem_limit: 2g
+
 volumes:
   postgres-data:
   seaweedfs-data:

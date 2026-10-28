@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from testcontainers.core.container import DockerContainer
@@ -53,3 +53,16 @@ def test_download_is_idempotent_and_keeps_source_metadata(store: S3RawStore) -> 
     assert head["ContentLength"] == len(body)
     assert head["Metadata"]["sha256"] == hashlib.sha256(body).hexdigest()
     assert head["Metadata"]["source-last-modified"] == "17-Jun-2026 10:15:08"
+
+
+def test_list_objects_returns_source_versions(store: S3RawStore) -> None:
+    _run(store)
+
+    objects = {o.key: o for o in store.list_objects()}
+
+    hist = objects[f"raw/dwd/daily_kl/historical/{HIST_ZIP}"]
+    assert hist.kind == "historical"
+    assert hist.sha256 == hashlib.sha256(read_fixture(HIST_ZIP)).hexdigest()
+    assert hist.source_modified_at == datetime(2026, 6, 17, 10, 15, 8, tzinfo=UTC)
+    assert {o.kind for o in objects.values()} == {"historical", "recent", "stations"}
+    assert store.get(hist.key) == read_fixture(HIST_ZIP)

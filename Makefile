@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
-.PHONY: help install up down download lint format test clean
+.PHONY: help install up down download bronze silver silver-full lint format test clean
 
 help: ## List targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
 install: ## Create .venv and install pre-commit hooks
 	uv sync
@@ -20,6 +20,17 @@ down: ## Stop the stack (data volumes are kept)
 
 download: .env ## Fetch new/changed DWD files into the raw zone
 	uv run python -m climate_lakehouse.ingest.download
+
+SPARK_RUN = docker compose run --rm --build spark python -m
+
+bronze: .env ## Load new raw files into the bronze tables (Spark container)
+	$(SPARK_RUN) climate_lakehouse.transform.bronze
+
+silver: .env ## Update silver from new bronze rows, with quality gates (Spark container)
+	$(SPARK_RUN) climate_lakehouse.transform.silver
+
+silver-full: .env ## Recompute silver completely, e.g. after changing START_YEAR
+	$(SPARK_RUN) climate_lakehouse.transform.silver --full-refresh
 
 lint: ## Ruff lint + format check + mypy
 	uv run ruff check .
