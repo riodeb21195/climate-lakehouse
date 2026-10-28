@@ -1,0 +1,30 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Data and Spark output (never commit)
+data/
+spark-warehouse/
+spark-events/
+metastore_db/
+derby.log
+benchmarks/results/raw/
+
+# Notebooks and IDE
+.ipynb_checkpoints/
+.idea/
+.vscode/
+.DS_Store
