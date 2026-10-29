@@ -1,4 +1,4 @@
-"""Daily climate pipeline: download -> bronze -> silver -> gold -> reconcile.
+"""Daily climate pipeline: download -> bronze -> silver -> gold -> reconcile -> maintain.
 
 Every job is idempotent and incremental, so a rerun only does what is left. A backfill (e.g.
 after changing START_YEAR or a quality rule) is a manual run with `full_refresh` set, which
@@ -40,5 +40,6 @@ with DAG(
     silver = BashOperator(task_id="silver", bash_command=f"{JOB}transform.silver {FULL_REFRESH}")
     gold = BashOperator(task_id="gold", bash_command=f"{JOB}transform.gold {FULL_REFRESH}")
     reconcile = BashOperator(task_id="reconcile", bash_command=f"{JOB}transform.reconcile")
+    maintain = BashOperator(task_id="maintain", bash_command=f"{JOB}transform.maintain compact")
 
-    download >> bronze >> silver >> gold >> reconcile
+    download >> bronze >> silver >> gold >> reconcile >> maintain

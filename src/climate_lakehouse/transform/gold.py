@@ -40,13 +40,15 @@ MIN_DAYS = 330
 REFERENCE_YEARS = (1961, 1990)
 
 # indicator -> (aggregate over the days of a year, silver column it needs). Thresholds are the
-# DWD definitions: hot day Tmax >= 30 °C, frost day Tmin < 0 °C, heavy rain >= 20 mm.
+# DWD definitions: hot day Tmax >= 30 °C, frost day Tmin < 0 °C, heavy rain >= 20 mm,
+# tropical night Tmin >= 20 °C.
 INDICATORS = {
     "heat_days": ("count_if(temp_max_c >= 30)", "temp_max_c"),
     "frost_days": ("count_if(temp_min_c < 0)", "temp_min_c"),
     "heavy_rain_days": ("count_if(precipitation_mm >= 20)", "precipitation_mm"),
     "sunshine_h": ("sum(sunshine_h)", "sunshine_h"),
     "temp_mean_c": ("avg(temp_mean_c)", "temp_mean_c"),
+    "tropical_nights": ("count_if(temp_min_c >= 20)", "temp_min_c"),
 }
 
 
@@ -116,7 +118,8 @@ def check_station_year(station_year: DataFrame) -> list[GateResult]:
     duplicates = station_year.groupBy("station_id", "year").count().where("count > 1").count()
     impossible = station_year.where(
         "days_observed > 366 OR heat_days > days_observed OR frost_days > days_observed "
-        "OR heavy_rain_days > days_observed OR sunshine_h > 17 * days_observed"
+        "OR heavy_rain_days > days_observed OR tropical_nights > days_observed "
+        "OR sunshine_h > 17 * days_observed"
     ).count()
     return [
         GateResult("unique_key", duplicates == 0, f"{duplicates} duplicate (station_id, year)"),

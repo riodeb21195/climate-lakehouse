@@ -194,7 +194,46 @@ services:
         condition: service_completed_successfully
     mem_limit: 2g
 
+  # Dashboard, started on demand (make dashboard). DuckDB inside Superset reads gold directly.
+  superset:
+    build:
+      context: .
+      dockerfile: docker/superset/Dockerfile
+    image: climate-lakehouse-superset:local
+    profiles: ["dashboard"]
+    command:
+      - bash
+      - -c
+      - >-
+        superset db upgrade
+        && superset fab create-admin --username admin --firstname Admin --lastname Local
+        --email admin@localhost --password "$${SUPERSET_ADMIN_PASSWORD}" || true
+        && superset init
+        && /usr/bin/run-server.sh
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      WAREHOUSE: ${WAREHOUSE}
+      SERVER_THREADS_AMOUNT: 8
+    ports:
+      - "8088:8088"
+    volumes:
+      - superset-home:/app/superset_home
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8088/health"]
+      interval: 10s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      lakekeeper-bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    mem_limit: 1g
+
 volumes:
   postgres-data:
   seaweedfs-data:
   airflow-logs:
+  superset-home:

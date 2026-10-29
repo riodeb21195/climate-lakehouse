@@ -12,3 +12,7 @@ updates:
     directory: /docker
     schedule:
       interval: weekly
+  - package-ecosystem: docker
+    directory: /docker/superset
+    schedule:
+      interval: weekly

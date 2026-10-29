@@ -36,11 +36,11 @@ def dag() -> dict[str, object]:
 def test_jobs_run_in_order(dag: dict[str, object]) -> None:
     tasks = dag["tasks"]
     assert isinstance(tasks, dict)
-    order = ["download", "bronze", "silver", "gold", "reconcile"]
+    order = ["download", "bronze", "silver", "gold", "reconcile", "maintain"]
     assert set(tasks) == set(order)
     for upstream, downstream in itertools.pairwise(order):
         assert tasks[upstream]["downstream"] == [downstream]
-    assert tasks["reconcile"]["downstream"] == []
+    assert tasks["maintain"]["downstream"] == []
 
 
 def test_commands_target_existing_job_modules(dag: dict[str, object]) -> None:

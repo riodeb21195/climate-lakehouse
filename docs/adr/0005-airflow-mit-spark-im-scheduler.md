@@ -38,7 +38,11 @@ Spark muss ohnehin im Docker-Netz laufen).
   pandas 3.0.5, pyarrow 25; Projekt: pandas ≥ 3.1, pyarrow ≥ 26).
 
 ## Konsequenzen
-- Der Scheduler-Container hat ein Limit von 2,5 GiB, weil der Spark-Driver darin läuft.
+- Der Scheduler-Container hat ein Limit von 2,5 GiB, weil der Spark-Driver darin läuft. Beim
+  Lauf von null (2026-10-29) wurde Bronze mit 50 Archiven je Batch darin per OOM beendet
+  (Exit -9): pandas im Driver, JVM und Airflow-Prozesse teilen sich das Limit. Seitdem lädt
+  Bronze 20 Archive je Batch (`BRONZE_BATCH_FILES`). Der Abbruch kam vor dem ersten Commit, es
+  war also nichts halb geschrieben; der neue Lauf lud alle Archive.
 - Das Image ist groß (Airflow + Java + PySpark). Die CI baut es einmal für die Integrationstests,
   die CD baut es mit GitHub-Actions-Cache erneut und pusht es.
 - Die UI ist ohne Login (`SIMPLE_AUTH_MANAGER_ALL_ADMINS`), nur für den lokalen Stack gedacht.

@@ -21,16 +21,17 @@ DAILY = (
 )
 STATION_YEAR = (
     "station_id STRING, state STRING, year INT, days_observed INT, heat_days INT, "
-    "frost_days INT, heavy_rain_days INT, sunshine_h DOUBLE, temp_mean_c DOUBLE"
+    "frost_days INT, heavy_rain_days INT, sunshine_h DOUBLE, temp_mean_c DOUBLE, "
+    "tropical_nights INT"
 )
 
 
 def _days(spark: SparkSession, year: int, count: int) -> DataFrame:
-    """`count` days from Jan 1: days 0-9 hot, 10-14 frosty, 15-17 heavy rain."""
+    """`count` days from Jan 1: days 0-9 hot, 10-14 frosty, 15-17 heavy rain, 18 tropical."""
     rows = []
     for i in range(count):
         tmax = 31.0 if i < 10 else 15.0
-        tmin = -1.0 if 10 <= i < 15 else 5.0
+        tmin = -1.0 if 10 <= i < 15 else 21.0 if i == 18 else 5.0
         rain = 25.0 if 15 <= i < 18 else 1.0
         rows.append(("00001", date(year, 1, 1) + timedelta(days=i), 10.0, tmax, tmin, rain, 5.0))
     return spark.createDataFrame(rows, DAILY)
@@ -45,6 +46,7 @@ def test_station_year_counts_threshold_days(spark: SparkSession) -> None:
     full = rows[2000]
     assert (full.state, full.days_observed) == ("Sachsen", 366)
     assert (full.heat_days, full.frost_days, full.heavy_rain_days) == (10, 5, 3)
+    assert full.tropical_nights == 1
     assert (full.sunshine_h, full.temp_mean_c) == (5.0 * 366, 10.0)
     # 100 observed days are too few: no indicator rather than a biased one
     partial = rows[2001]
@@ -53,10 +55,10 @@ def test_station_year_counts_threshold_days(spark: SparkSession) -> None:
 
 
 def test_state_decade_compares_each_station_with_its_own_reference(spark: SparkSession) -> None:
-    rows = [("A", "Bayern", y, 365, 5, 80, 2, 1700.0, 8.0) for y in range(1961, 1991)]
-    rows += [("A", "Bayern", y, 365, 15, 60, 4, 1900.0, 9.5) for y in range(2010, 2020)]
+    rows = [("A", "Bayern", y, 365, 5, 80, 2, 1700.0, 8.0, 0) for y in range(1961, 1991)]
+    rows += [("A", "Bayern", y, 365, 15, 60, 4, 1900.0, 9.5, 2) for y in range(2010, 2020)]
     # B opened in 2010 at a warmer site: it raises the decade mean but has no reference
-    rows += [("B", "Bayern", y, 365, 25, 40, 4, 2000.0, 11.0) for y in range(2010, 2020)]
+    rows += [("B", "Bayern", y, 365, 25, 40, 4, 2000.0, 11.0, 6) for y in range(2010, 2020)]
 
     result = {
         r.decade: r for r in build_state_decade(spark.createDataFrame(rows, STATION_YEAR)).collect()
@@ -66,13 +68,14 @@ def test_state_decade_compares_each_station_with_its_own_reference(spark: SparkS
     assert (recent.state, recent.stations, recent.heat_days) == ("Bayern", 2, 20.0)
     assert recent.heat_days_vs_1961_1990 == 10.0  # station A only: 15 - 5
     assert recent.temp_mean_c_vs_1961_1990 == 1.5
+    assert recent.tropical_nights_vs_1961_1990 == 2.0
     assert result[1980].heat_days_vs_1961_1990 == 0.0
 
 
 def test_gate_flags_impossible_station_years(spark: SparkSession) -> None:
     rows = [
-        ("A", "Bayern", 2000, 365, 400, 0, 0, 0.0, 9.0),
-        ("A", "Bayern", 2000, 365, 1, 0, 0, 0.0, 9.0),
+        ("A", "Bayern", 2000, 365, 400, 0, 0, 0.0, 9.0, 0),
+        ("A", "Bayern", 2000, 365, 1, 0, 0, 0.0, 9.0, 0),
     ]
     checks = {c.name: c for c in check_station_year(spark.createDataFrame(rows, STATION_YEAR))}
 

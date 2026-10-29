@@ -63,6 +63,8 @@ GOLD_METRICS = {
     "heavy_rain_days": "INT",
     "sunshine_h": "DOUBLE",
     "temp_mean_c": "DOUBLE",
+    # Added after the first release; existing tables get it via `_add_missing_columns`.
+    "tropical_nights": "INT",
 }
 
 _PROPS = "TBLPROPERTIES ('format-version' = '2', 'write.merge.mode' = 'copy-on-write')"
@@ -200,12 +202,31 @@ DDL = [
 WRITE_ORDER = {SILVER_DAILY: "station_id, measure_date"}
 
 
+# Columns added after a table was first created. Iceberg adds a column as a metadata change:
+# no data file is rewritten, and old rows read as NULL until they are recomputed.
+ADDED_COLUMNS = {
+    GOLD_STATION_YEAR: {"tropical_nights": "INT"},
+    GOLD_STATE_DECADE: {"tropical_nights": "DOUBLE", "tropical_nights_vs_1961_1990": "DOUBLE"},
+}
+
+
 def ensure_tables(spark: SparkSession) -> None:
     for statement in DDL:
         spark.sql(statement)
+    _add_missing_columns(spark)
     for table, order in WRITE_ORDER.items():
         if read_property(spark, table, "sort-order") is None:
             spark.sql(f"ALTER TABLE {table} WRITE ORDERED BY {order}")
+
+
+def _add_missing_columns(spark: SparkSession) -> None:
+    for table, columns in ADDED_COLUMNS.items():
+        existing = set(spark.table(table).columns)
+        missing = {name: t for name, t in columns.items() if name not in existing}
+        if missing:
+            # Writers select the target's columns by name, so position does not matter.
+            added = ", ".join(f"{name} {sql_type}" for name, sql_type in missing.items())
+            spark.sql(f"ALTER TABLE {table} ADD COLUMNS ({added})")
 
 
 def merge_rows(

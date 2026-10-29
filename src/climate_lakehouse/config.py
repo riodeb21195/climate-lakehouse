@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     spark_driver_memory: str = "1536m"
     # Comma-separated local jar paths (baked into the Spark image); empty = resolve from Maven
     spark_jars: str = ""
-    bronze_batch_files: int = Field(default=50, ge=1)
+    # 50 was killed (cgroup OOM) on the first load inside the Airflow scheduler (2026-10-29)
+    bronze_batch_files: int = Field(default=20, ge=1)
     max_reject_ratio: float = Field(default=0.01, ge=0, le=1)
 
     alert_channel: Literal["log", "slack"] = "log"
