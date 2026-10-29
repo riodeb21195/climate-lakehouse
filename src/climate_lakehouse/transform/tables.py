@@ -1,8 +1,9 @@
-"""Iceberg table definitions for bronze and silver, and the MERGE used to write them."""
+"""Iceberg table definitions of all layers, and the MERGE used to write them."""
 
 import uuid
 
 from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 
 BRONZE_DAILY = "bronze.dwd_daily_kl"
 BRONZE_STATIONS = "bronze.dwd_stations"
@@ -10,6 +11,10 @@ BRONZE_FILES = "bronze.dwd_files"
 SILVER_DAILY = "silver.daily_observations"
 SILVER_REJECTED = "silver.daily_observations_rejected"
 SILVER_STATIONS = "silver.stations"
+GOLD_STATION_YEAR = "gold.station_year"
+GOLD_STATE_DECADE = "gold.state_decade"
+OPS_RUNS = "ops.pipeline_runs"
+OPS_CHECKS = "ops.quality_results"
 
 # Source columns of produkt_klima_tag (lower-cased) with their types; values stay as delivered.
 BRONZE_MEASURES = {
@@ -51,6 +56,15 @@ SILVER_MEASURES = {
     "tgk": "temp_min_ground_c",
 }
 
+# Yearly indicators per station; NULL where the year has too few observations for it.
+GOLD_METRICS = {
+    "heat_days": "INT",
+    "frost_days": "INT",
+    "heavy_rain_days": "INT",
+    "sunshine_h": "DOUBLE",
+    "temp_mean_c": "DOUBLE",
+}
+
 _PROPS = "TBLPROPERTIES ('format-version' = '2', 'write.merge.mode' = 'copy-on-write')"
 
 
@@ -63,6 +77,8 @@ _silver_measures = {SILVER_MEASURES[c]: t for c, t in BRONZE_MEASURES.items()}
 DDL = [
     "CREATE NAMESPACE IF NOT EXISTS bronze",
     "CREATE NAMESPACE IF NOT EXISTS silver",
+    "CREATE NAMESPACE IF NOT EXISTS gold",
+    "CREATE NAMESPACE IF NOT EXISTS ops",
     # Partitioned by source kind: the daily MERGE of the recent files only rewrites the small
     # `recent` partition, the historical partition changes once a year.
     f"""CREATE TABLE IF NOT EXISTS {BRONZE_DAILY} (
@@ -135,6 +151,45 @@ DDL = [
   silver_run_id STRING NOT NULL,
   loaded_at TIMESTAMP NOT NULL
 ) USING iceberg {_PROPS}""",
+    # Partitioned by decade: an update rewrites the decades it touches as a whole, and the
+    # table stays at a few files per decade instead of one tiny file per year.
+    f"""CREATE TABLE IF NOT EXISTS {GOLD_STATION_YEAR} (
+  station_id STRING NOT NULL,
+  state STRING NOT NULL,
+  year INT NOT NULL,
+  days_observed INT NOT NULL,
+  {_columns(GOLD_METRICS)},
+  gold_run_id STRING NOT NULL,
+  loaded_at TIMESTAMP NOT NULL
+) USING iceberg PARTITIONED BY (truncate(10, year)) {_PROPS}""",
+    f"""CREATE TABLE IF NOT EXISTS {GOLD_STATE_DECADE} (
+  state STRING NOT NULL,
+  decade INT NOT NULL,
+  stations INT NOT NULL,
+  {_columns(dict.fromkeys(GOLD_METRICS, "DOUBLE"))},
+  {_columns({f"{name}_vs_1961_1990": "DOUBLE" for name in GOLD_METRICS})},
+  gold_run_id STRING NOT NULL,
+  loaded_at TIMESTAMP NOT NULL
+) USING iceberg {_PROPS}""",
+    f"""CREATE TABLE IF NOT EXISTS {OPS_RUNS} (
+  run_id STRING NOT NULL,
+  job STRING NOT NULL,
+  status STRING NOT NULL,
+  started_at TIMESTAMP NOT NULL,
+  finished_at TIMESTAMP NOT NULL,
+  duration_s DOUBLE NOT NULL,
+  rows_written BIGINT NOT NULL,
+  details STRING NOT NULL,
+  error STRING
+) USING iceberg {_PROPS}""",
+    f"""CREATE TABLE IF NOT EXISTS {OPS_CHECKS} (
+  run_id STRING NOT NULL,
+  job STRING NOT NULL,
+  check_name STRING NOT NULL,
+  passed BOOLEAN NOT NULL,
+  detail STRING NOT NULL,
+  checked_at TIMESTAMP NOT NULL
+) USING iceberg {_PROPS}""",
 ]
 
 
@@ -171,3 +226,19 @@ def merge_rows(
         spark.sql(statement)
     finally:
         spark.catalog.dropTempView(view)
+
+
+def read_property(spark: SparkSession, table: str, key: str) -> str | None:
+    rows = spark.sql(f"SHOW TBLPROPERTIES {table}").where(F.col("key") == key)
+    first = rows.first()
+    return first["value"] if first else None
+
+
+def set_property(spark: SparkSession, table: str, key: str, value: str) -> None:
+    spark.sql(f"ALTER TABLE {table} SET TBLPROPERTIES ('{key}' = '{value}')")
+
+
+def max_timestamp(df: DataFrame, column: str) -> str | None:
+    """Latest value of a timestamp column at microsecond precision, usable as a watermark."""
+    first = df.select(F.date_format(F.max(column), "yyyy-MM-dd HH:mm:ss.SSSSSS")).first()
+    return first[0] if first else None

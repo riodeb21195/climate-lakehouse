@@ -24,6 +24,14 @@ services:
 
   seaweedfs:
     image: chrislusf/seaweedfs:4.51
+    # Upload and read buffers capped so that Spark's parallel writes fit the memory limit
+    command:
+      - mini
+      - -dir=/data
+      - -s3.concurrentUploadLimitMB=64
+      - -filer.concurrentUploadLimitMB=64
+      - -volume.concurrentUploadLimitMB=64
+      - -s3.readerCacheSizeMB=64
     environment:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
@@ -36,7 +44,9 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8333/healthz || exit 1"]
       interval: 5s
       retries: 20
-    mem_limit: 256m
+    # 256m without buffer caps was OOM-killed while bronze wrote the 50-station sample
+    mem_limit: 384m
+    restart: unless-stopped
 
   lakekeeper-migrate:
     image: quay.io/lakekeeper/catalog:v0.14.2

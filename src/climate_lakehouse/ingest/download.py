@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
+from climate_lakehouse.alerts import send_alert
 from climate_lakehouse.config import Settings, get_settings
 from climate_lakehouse.ingest.dwd import (
     STATION_LIST_NAME,
@@ -154,7 +155,14 @@ def main() -> int:
         "download finished",
         extra={**asdict(summary), "status": summary.status, "files_failed": summary.files_failed},
     )
-    return 1 if summary.errors else 0
+    if summary.errors:
+        send_alert(
+            settings,
+            f"download failed for {summary.files_failed} files (run {summary.run_id})",
+            "\n".join(summary.errors[:20]),
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -9,22 +9,16 @@ import argparse
 import logging
 import sys
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
-from climate_lakehouse.config import Settings, get_settings
-from climate_lakehouse.logging import configure_logging
+from climate_lakehouse.config import Settings
 from climate_lakehouse.transform.bronze import row_hash
-from climate_lakehouse.transform.quality import (
-    QualityGateError,
-    apply_row_rules,
-    check_gates,
-    enforce,
-)
-from climate_lakehouse.transform.spark import build_session
+from climate_lakehouse.transform.ops import run_job
+from climate_lakehouse.transform.quality import GateResult, apply_row_rules, check_gates, enforce
 from climate_lakehouse.transform.tables import (
     BRONZE_DAILY,
     BRONZE_STATIONS,
@@ -33,7 +27,10 @@ from climate_lakehouse.transform.tables import (
     SILVER_REJECTED,
     SILVER_STATIONS,
     ensure_tables,
+    max_timestamp,
     merge_rows,
+    read_property,
+    set_property,
 )
 
 log = logging.getLogger(__name__)
@@ -54,7 +51,11 @@ class SilverSummary:
     stations_recomputed: int = 0
     rows_valid: int = 0
     rows_rejected: int = 0
-    gates: dict[str, str] = field(default_factory=dict)
+    checks: list[GateResult] = field(default_factory=list)
+
+    @property
+    def rows_written(self) -> int:
+        return self.rows_valid + self.rows_rejected
 
 
 def build_daily(bronze: DataFrame, start_year: int) -> DataFrame:
@@ -91,20 +92,17 @@ def build_stations(bronze_stations: DataFrame) -> DataFrame:
 
 
 def run_silver(
-    spark: SparkSession, settings: Settings, full_refresh: bool = False
+    spark: SparkSession, settings: Settings, full_refresh: bool = False, run_id: str | None = None
 ) -> SilverSummary:
     summary = SilverSummary(
-        run_id=str(uuid.uuid4()), started_at=datetime.now(UTC), full_refresh=full_refresh
+        run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC), full_refresh=full_refresh
     )
     ensure_tables(spark)
     bronze = spark.table(BRONZE_DAILY)
 
-    since = None if full_refresh else _read_watermark(spark)
-    until = bronze.select(
-        F.date_format(F.max("loaded_at"), "yyyy-MM-dd HH:mm:ss.SSSSSS").alias("until")
-    ).first()
+    since = None if full_refresh else read_property(spark, SILVER_DAILY, WATERMARK)
     summary.watermark_from = since
-    summary.watermark_to = until["until"] if until else None
+    summary.watermark_to = max_timestamp(bronze, "loaded_at")
     if summary.watermark_to is None or summary.watermark_to == since:
         log.info("silver up to date", extra={"watermark": since})
         summary.finished_at = datetime.now(UTC)
@@ -126,12 +124,9 @@ def run_silver(
     stations_df = build_stations(spark.table(BRONZE_STATIONS)).cache()
     checked = apply_row_rules(build_daily(source, settings.start_year)).cache()
     try:
-        results = check_gates(checked, stations_df, KEYS, settings.max_reject_ratio)
-        summary.gates = {
-            r.name: ("passed" if r.passed else "failed") + f": {r.detail}" for r in results
-        }
-        log.info("quality gates", extra={"run_id": summary.run_id, "gates": summary.gates})
-        enforce(results)
+        summary.checks = check_gates(checked, stations_df, KEYS, settings.max_reject_ratio)
+        log.info("quality gates", extra={"run_id": summary.run_id, "checks": summary.checks})
+        enforce(summary.checks)
 
         stamp = [
             F.lit(summary.run_id).alias("silver_run_id"),
@@ -149,17 +144,9 @@ def run_silver(
         checked.unpersist()
         stations_df.unpersist()
 
-    spark.sql(
-        f"ALTER TABLE {SILVER_DAILY} SET TBLPROPERTIES ('{WATERMARK}' = '{summary.watermark_to}')"
-    )
+    set_property(spark, SILVER_DAILY, WATERMARK, summary.watermark_to)
     summary.finished_at = datetime.now(UTC)
     return summary
-
-
-def _read_watermark(spark: SparkSession) -> str | None:
-    rows = spark.sql(f"SHOW TBLPROPERTIES {SILVER_DAILY}").where(F.col("key") == WATERMARK)
-    first = rows.first()
-    return first["value"] if first else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -170,19 +157,10 @@ def main(argv: list[str] | None = None) -> int:
         help="recompute all stations, e.g. after changing START_YEAR or a quality rule",
     )
     args = parser.parse_args(argv)
-
-    configure_logging()
-    settings = get_settings()
-    spark = build_session("silver", settings)
-    try:
-        summary = run_silver(spark, settings, full_refresh=args.full_refresh)
-    except QualityGateError as exc:
-        log.error("silver blocked by quality gate", extra={"error": str(exc)})
-        return 1
-    finally:
-        spark.stop()
-    log.info("silver finished", extra=asdict(summary))
-    return 0
+    return run_job(
+        "silver",
+        lambda spark, settings, run_id: run_silver(spark, settings, args.full_refresh, run_id),
+    )
 
 
 if __name__ == "__main__":

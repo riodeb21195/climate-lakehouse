@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install up down download bronze silver silver-full lint format test clean
+.PHONY: help install up down download bronze silver silver-full gold gold-full reconcile run lint format test clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -31,6 +31,17 @@ silver: .env ## Update silver from new bronze rows, with quality gates (Spark co
 
 silver-full: .env ## Recompute silver completely, e.g. after changing START_YEAR
 	$(SPARK_RUN) climate_lakehouse.transform.silver --full-refresh
+
+gold: .env ## Update gold indicators for decades with new silver rows (Spark container)
+	$(SPARK_RUN) climate_lakehouse.transform.gold
+
+gold-full: .env ## Recompute gold completely, e.g. after silver-full
+	$(SPARK_RUN) climate_lakehouse.transform.gold --full-refresh
+
+reconcile: .env ## Check that every layer accounts for its source (Spark container)
+	$(SPARK_RUN) climate_lakehouse.transform.reconcile
+
+run: download bronze silver gold reconcile ## Whole pipeline once, in order
 
 lint: ## Ruff lint + format check + mypy
 	uv run ruff check .

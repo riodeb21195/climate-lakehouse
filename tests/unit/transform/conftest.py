@@ -76,9 +76,9 @@ def spark_session(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SparkSes
 
 @pytest.fixture
 def spark(spark_session: SparkSession) -> Iterator[SparkSession]:
-    """The shared session, with all bronze and silver tables dropped after each test."""
+    """The shared session, with all tables dropped after each test."""
     yield spark_session
-    for namespace in ("bronze", "silver"):
+    for namespace in ("bronze", "silver", "gold", "ops"):
         if spark_session.catalog.databaseExists(namespace):
             for table in spark_session.sql(f"SHOW TABLES IN {namespace}").collect():
                 spark_session.sql(f"DROP TABLE {namespace}.{table.tableName} PURGE")
