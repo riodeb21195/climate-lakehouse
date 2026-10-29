@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install up down download bronze silver silver-full gold gold-full reconcile run backfill lint format test clean
+.PHONY: help install up down download bronze silver silver-full gold gold-full reconcile compact rollback benchmark dashboard run backfill lint format test clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -15,8 +15,8 @@ install: ## Create .venv and install pre-commit hooks
 up: .env ## Build the image, start the stack and wait until it is healthy
 	docker compose up -d --build --wait
 
-down: ## Stop the stack (data volumes are kept)
-	docker compose down
+down: ## Stop the stack and the dashboard (data volumes are kept)
+	docker compose --profile dashboard down
 
 download: .env ## Fetch new/changed DWD files into the raw zone
 	uv run python -m climate_lakehouse.ingest.download
@@ -41,6 +41,18 @@ gold-full: .env ## Recompute gold completely, e.g. after silver-full
 reconcile: .env ## Check that every layer accounts for its source (Spark container)
 	$(SPARK_RUN) climate_lakehouse.transform.reconcile
 
+compact: .env ## Compact data files and expire old snapshots (also the last DAG task)
+	$(SPARK_RUN) climate_lakehouse.transform.maintain compact
+
+rollback: .env ## Roll TABLE back to its state at AT (UTC), e.g. make rollback TABLE=gold.state_decade AT="2026-10-29 12:00:00"
+	$(SPARK_RUN) climate_lakehouse.transform.maintain rollback "$(TABLE)" "$(AT)"
+
+benchmark: .env ## Query times: silver as built vs. an unpartitioned copy
+	$(SPARK_RUN) climate_lakehouse.transform.benchmark
+
+dashboard: .env ## Start Superset (http://localhost:8088) next to the stack
+	docker compose --profile dashboard up -d --build --wait superset
+
 run: ## Trigger the pipeline DAG in Airflow (progress in the UI)
 	docker compose exec airflow-scheduler airflow dags trigger climate_pipeline
 	@echo "Progress: http://localhost:8080/dags/climate_pipeline"
@@ -60,6 +72,6 @@ format: ## Auto-fix lint issues and format
 test: ## Unit and integration tests (needs Docker) with coverage
 	uv run pytest --cov --cov-report=term-missing
 
-clean: ## Stop the stack, DELETE its volumes and remove local caches
-	docker compose down -v
+clean: ## Stop everything, DELETE all volumes (data, Airflow history, dashboard), remove caches
+	docker compose --profile dashboard --profile jobs down -v --remove-orphans
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage coverage.xml htmlcov dist
