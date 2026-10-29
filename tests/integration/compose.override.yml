@@ -4,3 +4,9 @@ services:
     ports: !override ["8333"]
   lakekeeper:
     ports: !reset []
+  # The job tests start the jobs directly; Airflow is covered by test_dag.py.
+  airflow-init: &off
+    profiles: ["airflow"]
+  airflow-api-server: *off
+  airflow-scheduler: *off
+  airflow-dag-processor: *off

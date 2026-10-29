@@ -6,7 +6,7 @@
 Frosttage, Starkregentage, Sonnenstunden und Mitteltemperatur, je Bundesland und Jahrzehnt,
 im Vergleich zur Referenzperiode 1961–1990?
 
-> In Arbeit: Raw, Bronze, Silver und Gold stehen. Orchestrierung und Dashboard folgen.
+> In Arbeit: Pipeline und Orchestrierung stehen. Dashboard und Messungen folgen.
 
 ## Datenfluss
 
@@ -42,15 +42,22 @@ Voraussetzungen: Docker (VM mit mindestens ~4,8 GiB RAM), [uv](https://docs.astr
 
 ```bash
 make install    # .venv anlegen, pre-commit-Hooks installieren
-make up         # Postgres, SeaweedFS, Lakekeeper starten (legt .env aus .env.example an)
-make download   # DWD-Dateien der ausgewählten Stationen in die Raw-Zone laden
+make up         # Image bauen, alle Dienste inkl. Airflow starten (legt .env aus .env.example an)
+```
+
+Airflow (http://localhost:8080) startet den DAG `climate_pipeline` sofort einmal und danach
+täglich um 06:00 UTC: `download → bronze → silver → gold → reconcile`. `make run` löst ihn
+zusätzlich aus, `make backfill` mit `full_refresh` (Silver und Gold neu aus Bronze).
+
+Einzelne Schritte ohne Airflow, z. B. beim Entwickeln:
+
+```bash
+make download   # DWD-Dateien der ausgewählten Stationen in die Raw-Zone laden (vom Host)
 make bronze     # neue Raw-Dateien nach Bronze (Spark im Container)
 make silver     # Silver aktualisieren, mit Qualitäts-Gates
 make gold       # Kennzahlen für geänderte Dekaden neu berechnen
 make reconcile  # Abgleich Raw → Bronze → Silver → Gold
 ```
-
-`make run` führt alle fünf Schritte nacheinander aus.
 
 `STATION_LIMIT` in `.env` bestimmt die Stationsauswahl (Standard 50, `0` = alle). Nach einer
 Änderung von `START_YEAR` oder einer Qualitätsregel bauen `make silver-full` und danach
@@ -64,10 +71,13 @@ Der Stack ist auf eine Docker-VM mit ~4,8 GiB ausgelegt; jedes Limit steht in
 | Dienst | Limit |
 |---|---|
 | Postgres | 256 MiB |
-| SeaweedFS (Upload-Puffer auf 64 MB begrenzt; Spitze 302 MiB bei `silver-full`, 2026-10-29) | 384 MiB |
+| SeaweedFS (Upload-Puffer auf 64 MB begrenzt; Spitze 380 MiB im Airflow-Lauf, 2026-10-29) | 512 MiB |
 | Lakekeeper | 128 MiB |
-| Migration, Bootstrap (beenden sich nach dem Start) | 128 / 32 MiB |
-| Spark-Job (nur während eines Laufs) | 2 GiB, davon 1,5 GiB Driver-Heap |
+| Airflow API-Server (UI) | 640 MiB |
+| Airflow DAG-Processor | 384 MiB |
+| Airflow Scheduler inkl. Spark-Driver des laufenden Tasks (1,5 GiB Heap) | 2,5 GiB |
+| Migrationen, Bootstrap (beenden sich nach dem Start) | 512 / 128 / 32 MiB |
+| `make bronze` usw. (Service `jobs`, nur während eines Laufs) | 2 GiB |
 
 ## Entwicklung
 
@@ -78,7 +88,9 @@ make test       # Unit- und Integrationstests mit Coverage (braucht Docker und J
 
 Die Spark-Unit-Tests laufen lokal gegen einen Iceberg-Katalog im Temp-Verzeichnis und laden die
 Iceberg-JARs beim ersten Lauf von Maven. Die Integrationstests starten einen eigenen
-Compose-Stack (`climate-lakehouse-it`, zufällige Ports) und führen die Jobs im Spark-Image aus.
+Compose-Stack (`climate-lakehouse-it`, zufällige Ports, ohne Airflow), führen die Jobs im
+Pipeline-Image aus und prüfen dort Import und Aufbau des DAGs. Nach grüner CI auf `main` pusht
+die CD das Image nach `ghcr.io/riodeb21195/climate-lakehouse` (Tags `latest` und Commit-SHA).
 
 ## Architekturentscheidungen
 
@@ -86,3 +98,4 @@ Compose-Stack (`climate-lakehouse-it`, zufällige Ports) und führen die Jobs im
 - [ADR 0002: Lakekeeper als Iceberg-REST-Katalog](docs/adr/0002-lakekeeper-rest-katalog.md)
 - [ADR 0003: Inkrementelles Bronze und Silver mit Iceberg-MERGE](docs/adr/0003-inkrementelles-bronze-silver.md)
 - [ADR 0004: Gold-Kennzahlen, Referenzperiode und Überschreiben je Dekade](docs/adr/0004-gold-kennzahlen-und-referenzperiode.md)
+- [ADR 0005: Airflow mit LocalExecutor, Spark-Jobs im selben Image](docs/adr/0005-airflow-mit-spark-im-scheduler.md)

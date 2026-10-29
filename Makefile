@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install up down download bronze silver silver-full gold gold-full reconcile run lint format test clean
+.PHONY: help install up down download bronze silver silver-full gold gold-full reconcile run backfill lint format test clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -12,8 +12,8 @@ install: ## Create .venv and install pre-commit hooks
 	cp .env.example .env
 	@echo "Created .env from .env.example - review the passwords before sharing anything."
 
-up: .env ## Start the stack and wait until it is healthy
-	docker compose up -d --wait
+up: .env ## Build the image, start the stack and wait until it is healthy
+	docker compose up -d --build --wait
 
 down: ## Stop the stack (data volumes are kept)
 	docker compose down
@@ -21,7 +21,7 @@ down: ## Stop the stack (data volumes are kept)
 download: .env ## Fetch new/changed DWD files into the raw zone
 	uv run python -m climate_lakehouse.ingest.download
 
-SPARK_RUN = docker compose run --rm --build spark python -m
+SPARK_RUN = docker compose run --rm --build jobs
 
 bronze: .env ## Load new raw files into the bronze tables (Spark container)
 	$(SPARK_RUN) climate_lakehouse.transform.bronze
@@ -41,7 +41,12 @@ gold-full: .env ## Recompute gold completely, e.g. after silver-full
 reconcile: .env ## Check that every layer accounts for its source (Spark container)
 	$(SPARK_RUN) climate_lakehouse.transform.reconcile
 
-run: download bronze silver gold reconcile ## Whole pipeline once, in order
+run: ## Trigger the pipeline DAG in Airflow (progress in the UI)
+	docker compose exec airflow-scheduler airflow dags trigger climate_pipeline
+	@echo "Progress: http://localhost:8080/dags/climate_pipeline"
+
+backfill: ## Trigger the DAG with full_refresh: recompute silver and gold from bronze
+	docker compose exec airflow-scheduler airflow dags trigger climate_pipeline --conf '{"full_refresh": true}'
 
 lint: ## Ruff lint + format check + mypy
 	uv run ruff check .

@@ -10,7 +10,13 @@ from climate_lakehouse.ingest.storage import raw_key
 from climate_lakehouse.transform.bronze import run_bronze
 from climate_lakehouse.transform.quality import QualityGateError
 from climate_lakehouse.transform.silver import WATERMARK, run_silver
-from climate_lakehouse.transform.tables import SILVER_DAILY, SILVER_REJECTED, SILVER_STATIONS
+from climate_lakehouse.transform.tables import (
+    SILVER_DAILY,
+    SILVER_REJECTED,
+    SILVER_STATIONS,
+    ensure_tables,
+    read_property,
+)
 from tests.conftest import DRESDEN_RECENT_ZIP
 from tests.unit.transform.conftest import FIXTURE_TIME, MemoryRawReader
 from tests.unit.transform.test_bronze import _edit_product
@@ -153,3 +159,13 @@ def test_full_refresh_drops_rows_before_new_start_year(
 
     assert summary.stations_recomputed == 2
     assert spark.table(SILVER_DAILY).where("year(measure_date) < 2000").count() == 0
+
+
+def test_silver_is_written_in_station_order(spark: SparkSession) -> None:
+    ensure_tables(spark)
+    log_entries = spark.sql(f"SELECT * FROM {SILVER_DAILY}.metadata_log_entries").count()
+    ensure_tables(spark)  # the sort order is only set once
+
+    order = read_property(spark, SILVER_DAILY, "sort-order")
+    assert order == "station_id ASC NULLS FIRST, measure_date ASC NULLS FIRST"
+    assert spark.sql(f"SELECT * FROM {SILVER_DAILY}.metadata_log_entries").count() == log_entries

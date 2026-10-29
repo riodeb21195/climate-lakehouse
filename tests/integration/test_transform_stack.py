@@ -1,4 +1,4 @@
-"""All Spark jobs in the Spark image against the real stack (Lakekeeper, SeaweedFS).
+"""All Spark jobs in the pipeline image against the real stack (Lakekeeper, SeaweedFS).
 
 The jobs run inside the Docker network because Lakekeeper hands out its own S3 endpoint
 (ADR 0002). The stack gets its own compose project, so a running developer stack is untouched.
@@ -52,7 +52,7 @@ def _compose(*args: str) -> subprocess.CompletedProcess[str]:
 
 @pytest.fixture(scope="module")
 def stack() -> Iterator[S3RawStore]:
-    build = _compose("--profile", "jobs", "build", "spark")
+    build = _compose("--profile", "jobs", "build", "jobs")
     assert build.returncode == 0, build.stderr
     up = _compose("up", "-d", "--wait")
     try:
@@ -74,8 +74,8 @@ def stack() -> Iterator[S3RawStore]:
 
 
 def _run_job(module: str) -> dict[str, Any]:
-    """Run a job in the Spark image and return its final summary log record."""
-    result = _compose("run", "--rm", "--no-deps", "spark", "python", "-m", module)
+    """Run a job in the pipeline image and return its final summary log record."""
+    result = _compose("run", "--rm", "--no-deps", "jobs", module)
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-3000:]
     records = [json.loads(x) for x in result.stdout.splitlines() if x.startswith("{")]
     return next(r for r in reversed(records) if r["msg"].endswith("finished"))
