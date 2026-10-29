@@ -7,6 +7,42 @@ x-lakekeeper-env: &lakekeeper-env
   LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/lakekeeper
   RUST_LOG: info
 
+# Airflow and the jobs share one image (docker/Dockerfile).
+x-airflow: &airflow
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: ${IMAGE:-climate-lakehouse:local}
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__PARALLELISM: 1
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+    # Local stack only: every visitor of the UI is admin, no login (README, "Grenzen")
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    AIRFLOW__API__WORKERS: 1
+    STATION_LIMIT: ${STATION_LIMIT:-50}
+    START_YEAR: ${START_YEAR:-1950}
+    ALERT_CHANNEL: ${ALERT_CHANNEL:-log}
+    SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+    S3_BUCKET: ${S3_BUCKET}
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+    S3_SECRET_KEY: ${S3_SECRET_KEY}
+    WAREHOUSE: ${WAREHOUSE}
+    # Inside the Docker network; .env holds the host-side addresses
+    S3_ENDPOINT: http://seaweedfs:8333
+    CATALOG_URI: http://lakekeeper:8181/catalog
+    SPARK_DRIVER_MEMORY: 1536m
+  volumes:
+    - airflow-logs:/opt/airflow/logs
+  restart: unless-stopped
+
 services:
   postgres:
     image: postgres:17.9-alpine
@@ -44,8 +80,9 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8333/healthz || exit 1"]
       interval: 5s
       retries: 20
-    # 256m without buffer caps was OOM-killed while bronze wrote the 50-station sample
-    mem_limit: 384m
+    # 256m without buffer caps was OOM-killed while bronze wrote the 50-station sample;
+    # with caps it peaked at 380 MiB during an Airflow run (2026-10-29)
+    mem_limit: 512m
     restart: unless-stopped
 
   lakekeeper-migrate:
@@ -91,25 +128,67 @@ services:
     restart: "no"
     mem_limit: 32m
 
-  # Batch jobs, started on demand: docker compose run --rm spark python -m <module>
-  spark:
-    build:
-      context: .
-      dockerfile: docker/spark/Dockerfile
-    image: climate-lakehouse-spark:local
+  # Orchestration. The scheduler runs the tasks itself (LocalExecutor), so the Spark driver of
+  # a job lives in the scheduler container: one job at a time, see the DAG.
+  airflow-init:
+    <<: *airflow
+    command: ["bash", "-c", "airflow db migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 512m
+
+  airflow-api-server:
+    <<: *airflow
+    command: ["api-server"]
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 10s
+      retries: 20
+      start_period: 30s
+    depends_on: &after-init
+      airflow-init:
+        condition: service_completed_successfully
+    mem_limit: 640m
+
+  airflow-scheduler:
+    <<: *airflow
+    command: ["scheduler"]
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      <<: *after-init
+      # Tasks report to the Execution API; started earlier, the first task was killed.
+      airflow-api-server:
+        condition: service_healthy
+      lakekeeper-bootstrap:
+        condition: service_completed_successfully
+    mem_limit: 2560m
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: ["dag-processor"]
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    depends_on: *after-init
+    mem_limit: 384m
+
+  # Single jobs on demand (make bronze, ...): same image, without Airflow.
+  jobs:
+    <<: *airflow
+    entrypoint: ["/opt/climate/.venv/bin/python", "-m"]
+    command: ["climate_lakehouse.transform.reconcile"]
     profiles: ["jobs"]
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      # Inside the Docker network; .env holds the host-side addresses
-      S3_ENDPOINT: http://seaweedfs:8333
-      CATALOG_URI: http://lakekeeper:8181/catalog
-      S3_BUCKET: ${S3_BUCKET}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      WAREHOUSE: ${WAREHOUSE}
-      SPARK_DRIVER_MEMORY: 1536m
+    restart: "no"
     depends_on:
       lakekeeper-bootstrap:
         condition: service_completed_successfully
@@ -118,3 +197,4 @@ services:
 volumes:
   postgres-data:
   seaweedfs-data:
+  airflow-logs:

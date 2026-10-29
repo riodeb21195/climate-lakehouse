@@ -193,9 +193,19 @@ DDL = [
 ]
 
 
+# Spark SQL cannot declare a sort order in CREATE TABLE. Sorted writes keep one open file per
+# task: unsorted, the MERGE into the year-partitioned silver table opened a Parquet writer per
+# year in every task and ran out of driver heap (2026-10-29, 50 stations, 1.5 GiB heap). Station
+# order also lets a query for a few stations skip most row groups.
+WRITE_ORDER = {SILVER_DAILY: "station_id, measure_date"}
+
+
 def ensure_tables(spark: SparkSession) -> None:
     for statement in DDL:
         spark.sql(statement)
+    for table, order in WRITE_ORDER.items():
+        if read_property(spark, table, "sort-order") is None:
+            spark.sql(f"ALTER TABLE {table} WRITE ORDERED BY {order}")
 
 
 def merge_rows(
