@@ -46,6 +46,7 @@ def build_session(
         "spark.driver.memory": settings.spark_driver_memory,
         "spark.pyspark.python": sys.executable,
         "spark.ui.enabled": "false",
+        "spark.ui.showConsoleProgress": "false",  # progress bars would break the JSON log
         **(catalog_conf if catalog_conf is not None else rest_catalog_conf(settings)),
     }
     if settings.spark_jars:

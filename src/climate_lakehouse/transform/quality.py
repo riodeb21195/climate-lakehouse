@@ -13,6 +13,11 @@ from pyspark.sql import functions as F
 class QualityGateError(RuntimeError):
     """A run-level quality gate failed; the run must not publish its result."""
 
+    def __init__(self, results: list["GateResult"]) -> None:
+        self.results = results
+        failed = [r for r in results if not r.passed]
+        super().__init__("; ".join(f"{r.name}: {r.detail}" for r in failed))
+
 
 @dataclass(frozen=True)
 class RowRule:
@@ -85,6 +90,5 @@ def check_gates(
 
 
 def enforce(results: list[GateResult]) -> None:
-    failed = [r for r in results if not r.passed]
-    if failed:
-        raise QualityGateError("; ".join(f"{r.name}: {r.detail}" for r in failed))
+    if not all(r.passed for r in results):
+        raise QualityGateError(results)

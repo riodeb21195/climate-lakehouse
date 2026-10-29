@@ -10,7 +10,7 @@ import logging
 import sys
 import uuid
 import zipfile
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import batched
 
@@ -19,12 +19,12 @@ import pyarrow as pa
 from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
-from climate_lakehouse.config import Settings, get_settings
+from climate_lakehouse.config import Settings
 from climate_lakehouse.ingest.dwd import FormatError, parse_station_list, station_id_from_name
 from climate_lakehouse.ingest.storage import RawObject, RawReader, S3RawStore
 from climate_lakehouse.ingest.validate import PRODUCT_MEMBER, validate_kl_zip
-from climate_lakehouse.logging import configure_logging
-from climate_lakehouse.transform.spark import build_session
+from climate_lakehouse.transform.ops import run_job
+from climate_lakehouse.transform.quality import GateResult
 from climate_lakehouse.transform.tables import (
     BRONZE_DAILY,
     BRONZE_FILES,
@@ -56,6 +56,11 @@ class BronzeSummary:
     files_loaded: int = 0
     rows_parsed: int = 0
     stations_loaded: int = 0
+    checks: list[GateResult] = field(default_factory=list)  # bronze validates per file instead
+
+    @property
+    def rows_written(self) -> int:
+        return self.rows_parsed
 
 
 def parse_product(content: bytes) -> pd.DataFrame:
@@ -82,8 +87,10 @@ def parse_product(content: bytes) -> pd.DataFrame:
     return parsed
 
 
-def run_bronze(spark: SparkSession, settings: Settings, raw: RawReader) -> BronzeSummary:
-    summary = BronzeSummary(run_id=str(uuid.uuid4()), started_at=datetime.now(UTC))
+def run_bronze(
+    spark: SparkSession, settings: Settings, raw: RawReader, run_id: str | None = None
+) -> BronzeSummary:
+    summary = BronzeSummary(run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC))
     ensure_tables(spark)
 
     loaded = {
@@ -206,18 +213,13 @@ def _record_files(spark: SparkSession, files: list[tuple[RawObject, int]], run_i
 
 
 def main() -> int:
-    configure_logging()
-    settings = get_settings()
-    raw = S3RawStore.connect(
-        settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key
-    )
-    spark = build_session("bronze", settings)
-    try:
-        summary = run_bronze(spark, settings, raw)
-    finally:
-        spark.stop()
-    log.info("bronze finished", extra=asdict(summary))
-    return 0
+    def work(spark: SparkSession, settings: Settings, run_id: str) -> BronzeSummary:
+        raw = S3RawStore.connect(
+            settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key
+        )
+        return run_bronze(spark, settings, raw, run_id)
+
+    return run_job("bronze", work)
 
 
 if __name__ == "__main__":

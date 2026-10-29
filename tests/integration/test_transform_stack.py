@@ -1,4 +1,4 @@
-"""Bronze and silver jobs in the Spark image against the real stack (Lakekeeper, SeaweedFS).
+"""All Spark jobs in the Spark image against the real stack (Lakekeeper, SeaweedFS).
 
 The jobs run inside the Docker network because Lakekeeper hands out its own S3 endpoint
 (ADR 0002). The stack gets its own compose project, so a running developer stack is untouched.
@@ -81,14 +81,19 @@ def _run_job(module: str) -> dict[str, Any]:
     return next(r for r in reversed(records) if r["msg"].endswith("finished"))
 
 
-def test_bronze_and_silver_write_iceberg_tables_through_the_catalog(stack: S3RawStore) -> None:
+def test_pipeline_writes_iceberg_tables_through_the_catalog(stack: S3RawStore) -> None:
     bronze = _run_job("climate_lakehouse.transform.bronze")
     assert (bronze["files_loaded"], bronze["stations_loaded"]) == (5, 10)
 
     silver = _run_job("climate_lakehouse.transform.silver")
     assert silver["stations_recomputed"] == 2
     assert silver["rows_valid"] > 0
-    assert all(result.startswith("passed") for result in silver["gates"].values())
+    assert all(check["passed"] for check in silver["checks"])
+
+    gold = _run_job("climate_lakehouse.transform.gold")
+    assert gold["decades_recomputed"] == [1960, 2020]
+    reconcile = _run_job("climate_lakehouse.transform.reconcile")
+    assert [c["passed"] for c in reconcile["checks"]] == [True, True, True]
 
     # Data and metadata files land in the warehouse prefix of the bucket
     listing = stack._client.list_objects_v2(Bucket=_env("S3_BUCKET"), Prefix="warehouse/")
@@ -96,3 +101,4 @@ def test_bronze_and_silver_write_iceberg_tables_through_the_catalog(stack: S3Raw
 
     assert _run_job("climate_lakehouse.transform.bronze")["files_loaded"] == 0
     assert _run_job("climate_lakehouse.transform.silver")["stations_recomputed"] == 0
+    assert _run_job("climate_lakehouse.transform.gold")["decades_recomputed"] == []
