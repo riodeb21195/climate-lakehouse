@@ -6,35 +6,22 @@ run, is recorded in ops.quality_results and raises an alert.
 
 import sys
 import uuid
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
 from climate_lakehouse.config import Settings
 from climate_lakehouse.ingest.storage import RawReader, S3RawStore
-from climate_lakehouse.transform.ops import run_job
+from climate_lakehouse.transform.ops import JobSummary, run_job
 from climate_lakehouse.transform.quality import GateResult
 from climate_lakehouse.transform.tables import (
     BRONZE_DAILY,
-    BRONZE_FILES,
     GOLD_STATION_YEAR,
     SILVER_DAILY,
     SILVER_REJECTED,
     ensure_tables,
+    loaded_versions,
 )
-
-
-@dataclass
-class ReconcileSummary:
-    run_id: str
-    started_at: datetime
-    checks: list[GateResult] = field(default_factory=list)
-
-    @property
-    def rows_written(self) -> int:
-        return 0
 
 
 def _compare(name: str, source: int, target: int, what: str) -> GateResult:
@@ -43,14 +30,11 @@ def _compare(name: str, source: int, target: int, what: str) -> GateResult:
 
 def run_reconcile(
     spark: SparkSession, settings: Settings, raw: RawReader, run_id: str | None = None
-) -> ReconcileSummary:
-    summary = ReconcileSummary(run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC))
+) -> JobSummary:
+    summary = JobSummary(run_id=run_id or str(uuid.uuid4()))
     ensure_tables(spark)
 
-    loaded = {
-        (r.source_key, r.source_sha256)
-        for r in spark.table(BRONZE_FILES).select("source_key", "source_sha256").collect()
-    }
+    loaded = loaded_versions(spark)
     objects = raw.list_objects()
     missing = sum((o.key, o.sha256) not in loaded for o in objects)
 
@@ -84,11 +68,8 @@ def run_reconcile(
 
 
 def main() -> int:
-    def work(spark: SparkSession, settings: Settings, run_id: str) -> ReconcileSummary:
-        raw = S3RawStore.connect(
-            settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key
-        )
-        return run_reconcile(spark, settings, raw, run_id)
+    def work(spark: SparkSession, settings: Settings, run_id: str) -> JobSummary:
+        return run_reconcile(spark, settings, S3RawStore.from_settings(settings), run_id)
 
     return run_job("reconcile", work)
 

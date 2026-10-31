@@ -2,7 +2,7 @@
 
 import uuid
 
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import Column, DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 BRONZE_DAILY = "bronze.dwd_daily_kl"
@@ -257,6 +257,18 @@ def merge_rows(
         spark.sql(statement)
     finally:
         spark.catalog.dropTempView(view)
+
+
+def row_hash(columns: list[str]) -> Column:
+    """Content hash of a row, compared by `merge_rows` to skip unchanged rows."""
+    values = [F.coalesce(F.col(c).cast("string"), F.lit("")) for c in columns]
+    return F.sha2(F.concat_ws("|", *values), 256)
+
+
+def loaded_versions(spark: SparkSession) -> set[tuple[str, str]]:
+    """(key, SHA-256) of every raw object version that bronze has fully loaded."""
+    rows = spark.table(BRONZE_FILES).select("source_key", "source_sha256").collect()
+    return {(row.source_key, row.source_sha256) for row in rows}
 
 
 def read_property(spark: SparkSession, table: str, key: str) -> str | None:

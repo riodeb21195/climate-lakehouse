@@ -10,28 +10,29 @@ import logging
 import sys
 import uuid
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import batched
 
 import pandas as pd
 import pyarrow as pa
-from pyspark.sql import Column, DataFrame, SparkSession, Window
+from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
 from climate_lakehouse.config import Settings
 from climate_lakehouse.ingest.dwd import FormatError, parse_station_list, station_id_from_name
 from climate_lakehouse.ingest.storage import RawObject, RawReader, S3RawStore
 from climate_lakehouse.ingest.validate import PRODUCT_MEMBER, validate_kl_zip
-from climate_lakehouse.transform.ops import run_job
-from climate_lakehouse.transform.quality import GateResult
+from climate_lakehouse.transform.ops import JobSummary, run_job
 from climate_lakehouse.transform.tables import (
     BRONZE_DAILY,
     BRONZE_FILES,
     BRONZE_MEASURES,
     BRONZE_STATIONS,
     ensure_tables,
+    loaded_versions,
     merge_rows,
+    row_hash,
 )
 
 log = logging.getLogger(__name__)
@@ -46,17 +47,14 @@ _PARSED_SCHEMA = (
 )
 
 
-@dataclass
-class BronzeSummary:
-    run_id: str
-    started_at: datetime
+@dataclass(kw_only=True)
+class BronzeSummary(JobSummary):  # no checks: bronze validates per file instead
     finished_at: datetime | None = None
     files_seen: int = 0
     files_skipped: int = 0
     files_loaded: int = 0
     rows_parsed: int = 0
     stations_loaded: int = 0
-    checks: list[GateResult] = field(default_factory=list)  # bronze validates per file instead
 
     @property
     def rows_written(self) -> int:
@@ -90,13 +88,10 @@ def parse_product(content: bytes) -> pd.DataFrame:
 def run_bronze(
     spark: SparkSession, settings: Settings, raw: RawReader, run_id: str | None = None
 ) -> BronzeSummary:
-    summary = BronzeSummary(run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC))
+    summary = BronzeSummary(run_id=run_id or str(uuid.uuid4()))
     ensure_tables(spark)
 
-    loaded = {
-        (row.source_key, row.source_sha256)
-        for row in spark.table(BRONZE_FILES).select("source_key", "source_sha256").collect()
-    }
+    loaded = loaded_versions(spark)
     objects = raw.list_objects()
     pending = [o for o in objects if (o.key, o.sha256) not in loaded]
     summary.files_seen = len(objects)
@@ -172,11 +167,6 @@ def _latest_per_key(rows: DataFrame) -> DataFrame:
     return rows.withColumn("_rank", F.row_number().over(window)).where("_rank = 1").drop("_rank")
 
 
-def row_hash(columns: list[str]) -> Column:
-    values = [F.coalesce(F.col(c).cast("string"), F.lit("")) for c in columns]
-    return F.sha2(F.concat_ws("|", *values), 256)
-
-
 def _load_stations(spark: SparkSession, raw: RawReader, obj: RawObject, run_id: str) -> int:
     stations = parse_station_list(raw.get(obj.key).decode("latin-1"))
     if not stations:
@@ -214,10 +204,7 @@ def _record_files(spark: SparkSession, files: list[tuple[RawObject, int]], run_i
 
 def main() -> int:
     def work(spark: SparkSession, settings: Settings, run_id: str) -> BronzeSummary:
-        raw = S3RawStore.connect(
-            settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key
-        )
-        return run_bronze(spark, settings, raw, run_id)
+        return run_bronze(spark, settings, S3RawStore.from_settings(settings), run_id)
 
     return run_job("bronze", work)
 

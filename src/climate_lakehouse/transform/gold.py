@@ -16,7 +16,7 @@ from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
 from climate_lakehouse.config import Settings
-from climate_lakehouse.transform.ops import run_job
+from climate_lakehouse.transform.ops import JobSummary, run_job
 from climate_lakehouse.transform.quality import GateResult, enforce
 from climate_lakehouse.transform.tables import (
     GOLD_METRICS,
@@ -52,10 +52,8 @@ INDICATORS = {
 }
 
 
-@dataclass
-class GoldSummary:
-    run_id: str
-    started_at: datetime
+@dataclass(kw_only=True)
+class GoldSummary(JobSummary):
     full_refresh: bool
     finished_at: datetime | None = None
     watermark_from: str | None = None
@@ -63,7 +61,6 @@ class GoldSummary:
     decades_recomputed: list[int] = field(default_factory=list)
     station_years: int = 0
     state_decades: int = 0
-    checks: list[GateResult] = field(default_factory=list)
 
     @property
     def rows_written(self) -> int:
@@ -130,9 +127,7 @@ def check_station_year(station_year: DataFrame) -> list[GateResult]:
 def run_gold(
     spark: SparkSession, settings: Settings, full_refresh: bool = False, run_id: str | None = None
 ) -> GoldSummary:
-    summary = GoldSummary(
-        run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC), full_refresh=full_refresh
-    )
+    summary = GoldSummary(run_id=run_id or str(uuid.uuid4()), full_refresh=full_refresh)
     ensure_tables(spark)
     daily = spark.table(SILVER_DAILY)
     # A row moved to the rejected table is gone from daily: its decade changed as well.

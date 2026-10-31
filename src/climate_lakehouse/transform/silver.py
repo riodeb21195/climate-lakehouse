@@ -9,16 +9,15 @@ import argparse
 import logging
 import sys
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
 from climate_lakehouse.config import Settings
-from climate_lakehouse.transform.bronze import row_hash
-from climate_lakehouse.transform.ops import run_job
-from climate_lakehouse.transform.quality import GateResult, apply_row_rules, check_gates, enforce
+from climate_lakehouse.transform.ops import JobSummary, run_job
+from climate_lakehouse.transform.quality import apply_row_rules, check_gates, enforce
 from climate_lakehouse.transform.tables import (
     BRONZE_DAILY,
     BRONZE_STATIONS,
@@ -30,6 +29,7 @@ from climate_lakehouse.transform.tables import (
     max_timestamp,
     merge_rows,
     read_property,
+    row_hash,
     set_property,
 )
 
@@ -40,10 +40,8 @@ MISSING = -999
 WATERMARK = "climate.bronze-loaded-until"
 
 
-@dataclass
-class SilverSummary:
-    run_id: str
-    started_at: datetime
+@dataclass(kw_only=True)
+class SilverSummary(JobSummary):
     full_refresh: bool
     finished_at: datetime | None = None
     watermark_from: str | None = None
@@ -51,7 +49,6 @@ class SilverSummary:
     stations_recomputed: int = 0
     rows_valid: int = 0
     rows_rejected: int = 0
-    checks: list[GateResult] = field(default_factory=list)
 
     @property
     def rows_written(self) -> int:
@@ -94,9 +91,7 @@ def build_stations(bronze_stations: DataFrame) -> DataFrame:
 def run_silver(
     spark: SparkSession, settings: Settings, full_refresh: bool = False, run_id: str | None = None
 ) -> SilverSummary:
-    summary = SilverSummary(
-        run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC), full_refresh=full_refresh
-    )
+    summary = SilverSummary(run_id=run_id or str(uuid.uuid4()), full_refresh=full_refresh)
     ensure_tables(spark)
     bronze = spark.table(BRONZE_DAILY)
 

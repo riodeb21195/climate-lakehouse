@@ -14,8 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pyspark.sql import SparkSession
 
 from climate_lakehouse.config import Settings
-from climate_lakehouse.transform.ops import run_job
-from climate_lakehouse.transform.quality import GateResult
+from climate_lakehouse.transform.ops import JobSummary, run_job
 from climate_lakehouse.transform.spark import CATALOG
 from climate_lakehouse.transform.tables import (
     BRONZE_DAILY,
@@ -41,17 +40,10 @@ class TableFiles:
     added: int
 
 
-@dataclass
-class MaintainSummary:
-    run_id: str
-    started_at: datetime
+@dataclass(kw_only=True)
+class MaintainSummary(JobSummary):
     tables: list[TableFiles] = field(default_factory=list)
     snapshots_expired: int = 0
-    checks: list[GateResult] = field(default_factory=list)
-
-    @property
-    def rows_written(self) -> int:
-        return 0
 
 
 def data_files(spark: SparkSession, table: str) -> int:
@@ -84,7 +76,7 @@ def expire(spark: SparkSession, table: str, now: datetime) -> int:
 def run_maintain(
     spark: SparkSession, settings: Settings, run_id: str | None = None, now: datetime | None = None
 ) -> MaintainSummary:
-    summary = MaintainSummary(run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC))
+    summary = MaintainSummary(run_id=run_id or str(uuid.uuid4()))
     ensure_tables(spark)
     for table in COMPACTED:
         summary.tables.append(compact_table(spark, table))
@@ -92,19 +84,12 @@ def run_maintain(
     return summary
 
 
-@dataclass
-class RollbackSummary:
-    run_id: str
-    started_at: datetime
+@dataclass(kw_only=True)
+class RollbackSummary(JobSummary):
     table: str
     to_timestamp: str
     snapshot_before: int
     snapshot_after: int
-    checks: list[GateResult] = field(default_factory=list)
-
-    @property
-    def rows_written(self) -> int:
-        return 0
 
 
 def rollback(

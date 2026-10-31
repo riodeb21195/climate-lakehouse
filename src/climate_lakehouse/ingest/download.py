@@ -55,12 +55,6 @@ class DownloadSummary:
         return "failed" if self.errors else "success"
 
 
-@dataclass(frozen=True)
-class _Target:
-    kind: str  # historical | recent | stations
-    remote: RemoteFile
-
-
 def run_download(
     settings: Settings, http: HttpClient, store: RawStore, today: date | None = None
 ) -> DownloadSummary:
@@ -83,57 +77,52 @@ def run_download(
     )
     summary.stations_selected = len(selected)
 
-    targets = [_Target("historical", f) for f in historical if f.station_id in selected]
-    targets += [_Target("recent", f) for f in recent if f.station_id in selected]
+    targets = [("historical", f) for f in historical if f.station_id in selected]
+    targets += [("recent", f) for f in recent if f.station_id in selected]
     summary.files_planned = len(targets) + 1
 
-    _store_station_list(station_file, station_text, store, summary)
+    station_key = raw_key("stations", station_file.name)
+    if store.is_current(station_key, station_file):
+        summary.files_skipped += 1
+    else:
+        store.put(station_key, station_text, station_file, summary.run_id)
+        summary.files_downloaded += 1
+        summary.bytes_downloaded += len(station_text)
+
+    def fetch(target: tuple[str, RemoteFile]) -> int | str | None:
+        kind, remote = target
+        return _process(kind, remote, http, store, summary.run_id)
+
     with ThreadPoolExecutor(max_workers=settings.download_workers) as pool:
-        for outcome in pool.map(lambda t: _process(t, http, store, summary.run_id), targets):
-            _record(summary, outcome)
+        for outcome in pool.map(fetch, targets):
+            if isinstance(outcome, str):
+                summary.errors.append(outcome)
+            elif outcome is None:
+                summary.files_skipped += 1
+            else:
+                summary.files_downloaded += 1
+                summary.bytes_downloaded += outcome
 
     summary.finished_at = datetime.now(UTC)
     return summary
 
 
-def _store_station_list(
-    remote: RemoteFile, body: bytes, store: RawStore, summary: DownloadSummary
-) -> None:
-    key = raw_key("stations", remote.name)
-    if store.is_current(key, remote):
-        _record(summary, ("skipped", 0, None))
-    else:
-        store.put(key, body, remote, summary.run_id)
-        _record(summary, ("downloaded", len(body), None))
-
-
 def _process(
-    target: _Target, http: HttpClient, store: RawStore, run_id: str
-) -> tuple[str, int, str | None]:
-    remote = target.remote
-    key = raw_key(target.kind, remote.name)
+    kind: str, remote: RemoteFile, http: HttpClient, store: RawStore, run_id: str
+) -> int | str | None:
+    """Fetch one archive: bytes stored, None if already current, or an error message."""
+    key = raw_key(kind, remote.name)
     try:
         if store.is_current(key, remote):
-            return "skipped", 0, None
+            return None
         body = http.get(remote.url)
         validate_kl_zip(remote.name, body, remote.station_id or "")
         store.put(key, body, remote, run_id)
         log.info("stored", extra={"key": key, "bytes": len(body)})
-        return "downloaded", len(body), None
+        return len(body)
     except (FormatError, httpx.HTTPError) as exc:
         log.error("file failed", extra={"file": remote.name, "error": str(exc)})
-        return "failed", 0, f"{remote.name}: {exc}"
-
-
-def _record(summary: DownloadSummary, outcome: tuple[str, int, str | None]) -> None:
-    status, size, error = outcome
-    if status == "downloaded":
-        summary.files_downloaded += 1
-        summary.bytes_downloaded += size
-    elif status == "skipped":
-        summary.files_skipped += 1
-    elif error:
-        summary.errors.append(error)
+        return f"{remote.name}: {exc}"
 
 
 def main() -> int:
@@ -144,9 +133,7 @@ def main() -> int:
         max_retries=settings.http_max_retries,
         requests_per_s=settings.http_requests_per_s,
     )
-    store = S3RawStore.connect(
-        settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key
-    )
+    store = S3RawStore.from_settings(settings)
     try:
         summary = run_download(settings, http, store)
     finally:

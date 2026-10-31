@@ -10,13 +10,11 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 
 from pyspark.sql import SparkSession
 
 from climate_lakehouse.config import Settings
-from climate_lakehouse.transform.ops import run_job
-from climate_lakehouse.transform.quality import GateResult
+from climate_lakehouse.transform.ops import JobSummary, run_job
 from climate_lakehouse.transform.tables import SILVER_DAILY
 
 BASELINE = "ops.benchmark_daily_unpartitioned"
@@ -40,17 +38,10 @@ class Timing:
     runs_s: list[float]
 
 
-@dataclass
-class BenchmarkSummary:
-    run_id: str
-    started_at: datetime
+@dataclass(kw_only=True)
+class BenchmarkSummary(JobSummary):
     rows: int = 0
     timings: list[Timing] = field(default_factory=list)
-    checks: list[GateResult] = field(default_factory=list)
-
-    @property
-    def rows_written(self) -> int:
-        return 0
 
 
 def _time(spark: SparkSession, sql: str, repeat: int) -> list[float]:
@@ -66,7 +57,7 @@ def _time(spark: SparkSession, sql: str, repeat: int) -> list[float]:
 def run_benchmark(
     spark: SparkSession, settings: Settings, repeat: int = 5, run_id: str | None = None
 ) -> BenchmarkSummary:
-    summary = BenchmarkSummary(run_id=run_id or str(uuid.uuid4()), started_at=datetime.now(UTC))
+    summary = BenchmarkSummary(run_id=run_id or str(uuid.uuid4()))
     spark.sql(f"DROP TABLE IF EXISTS {BASELINE} PURGE")
     spark.sql(
         f"CREATE TABLE {BASELINE} USING iceberg AS "

@@ -8,9 +8,9 @@ import json
 import logging
 import uuid
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any
 
 from pyspark.sql import SparkSession
 
@@ -24,12 +24,17 @@ from climate_lakehouse.transform.tables import OPS_CHECKS, OPS_RUNS, ensure_tabl
 log = logging.getLogger(__name__)
 
 
-class JobSummary(Protocol):
+@dataclass(kw_only=True)
+class JobSummary:
+    """What every job returns; it ends up as one row in ops.pipeline_runs."""
+
     run_id: str
-    checks: list[GateResult]
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    checks: list[GateResult] = field(default_factory=list)
 
     @property
-    def rows_written(self) -> int: ...
+    def rows_written(self) -> int:
+        return 0
 
 
 Work = Callable[[SparkSession, Settings, str], JobSummary]
@@ -100,7 +105,7 @@ def run_job(
         # Checks that only report (e.g. reconciliation) fail the run without raising.
         error = "; ".join(f"{c.name}: {c.detail}" for c in summary.checks if not c.passed)
         status = "failed" if error else "succeeded"
-        details = asdict(summary)  # type: ignore[call-overload]
+        details = asdict(summary)
         record_run(
             spark,
             job,

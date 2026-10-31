@@ -15,16 +15,10 @@ dist/
 build/
 *.egg-info/
 
-# Data and Spark output (never commit)
-data/
+# Local Spark output
 spark-warehouse/
-spark-events/
-metastore_db/
-derby.log
-benchmarks/results/raw/
 
-# Notebooks and IDE
-.ipynb_checkpoints/
+# IDE
 .idea/
 .vscode/
 .DS_Store
