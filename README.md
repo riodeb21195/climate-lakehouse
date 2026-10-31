@@ -39,8 +39,9 @@ flowchart LR
 ```
 
 Airflow startet täglich download → bronze → silver → gold → reconcile → maintain. Spark schreibt
-alle Schichten über den Lakekeeper-Katalog, DuckDB liest Gold für das Dashboard. Jeder Job
-protokolliert Lauf und Prüfungen in `ops.pipeline_runs` und `ops.quality_results`.
+alle Schichten über den Lakekeeper-Katalog, DuckDB liest Gold für das Dashboard. Jeder Spark-Job
+protokolliert Lauf und Prüfungen in `ops.pipeline_runs` und `ops.quality_results`; der Download
+(ohne Spark) schreibt ins JSON-Log und alarmiert bei Fehlern.
 
 **Tech-Stack:** Python 3.12, PySpark 4.1, Apache Iceberg 1.12, Lakekeeper, SeaweedFS (S3), Airflow 3.3, DuckDB, Superset, Docker Compose, GitHub Actions, uv, ruff, mypy, pytest
 

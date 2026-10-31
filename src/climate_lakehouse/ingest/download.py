@@ -52,7 +52,7 @@ class DownloadSummary:
 
     @property
     def status(self) -> str:
-        return "failed" if self.errors else "success"
+        return "failed" if self.errors else "succeeded"
 
 
 def run_download(

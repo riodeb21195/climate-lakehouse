@@ -19,8 +19,11 @@ Der DAG `climate_pipeline` läuft täglich in dieser Reihenfolge, ein Lauf gleic
 5. **reconcile**: Raw → Bronze → Silver → Gold zählen zusammen.
 6. **maintain**: Dateien kompaktieren, Snapshots älter als 7 Tage verwerfen.
 
-Jeder Job schreibt einen Eintrag nach `ops.pipeline_runs` und seine Prüfungen nach
-`ops.quality_results`, auch wenn er scheitert, und alarmiert dann (Log, optional Slack).
+Jeder Spark-Job (ab bronze) schreibt einen Eintrag nach `ops.pipeline_runs` und seine Prüfungen
+nach `ops.quality_results`, auch wenn er scheitert, und alarmiert dann (Log, optional Slack).
+Der Download läuft ohne Spark: Er schreibt seine Zusammenfassung ins JSON-Log und alarmiert bei
+fehlgeschlagenen Dateien, erscheint aber nicht in `ops.pipeline_runs` und damit nicht im
+Dashboard.
 `make run` löst den DAG aus, `make backfill` mit `full_refresh` (Silver und Gold neu aus Bronze).
 
 ## Datenmodell
