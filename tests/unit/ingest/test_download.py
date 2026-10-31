@@ -81,5 +81,5 @@ def test_missing_station_list_is_a_format_error() -> None:
 def test_main_returns_nonzero_when_files_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(download, "get_settings", lambda: _settings(0))
     monkeypatch.setattr(download, "HttpClient", lambda **_: _http())
-    monkeypatch.setattr(S3RawStore, "connect", lambda *_: MemoryStore())
+    monkeypatch.setattr(S3RawStore, "from_settings", lambda *_: MemoryStore())
     assert download.main() == 1

@@ -1,40 +1,29 @@
-"""Critical path of the ingest step against a real S3 server (SeaweedFS in a container)."""
+"""Critical path of the ingest step against the real S3 server of the stack (SeaweedFS)."""
 
 import hashlib
-from collections.abc import Iterator
 from datetime import UTC, date, datetime
 
 import pytest
-from testcontainers.core.container import DockerContainer
-from testcontainers.core.wait_strategies import HttpWaitStrategy
 
 from climate_lakehouse.config import Settings
 from climate_lakehouse.ingest.download import run_download
 from climate_lakehouse.ingest.http import HttpClient
 from climate_lakehouse.ingest.storage import S3RawStore
 from tests.conftest import HIST_ZIP, read_fixture
+from tests.integration.conftest import env
 from tests.unit.ingest.fakes import BASE, dwd_transport
 
 pytestmark = pytest.mark.integration
 
-BUCKET = "lakehouse"
-KEY, SECRET = "test", "test-secret"
-SEAWEEDFS_IMAGE = "chrislusf/seaweedfs:4.51"
+# Its own bucket, so the raw zone the job tests load stays as they set it up.
+BUCKET = "raw-ingest-test"
 
 
 @pytest.fixture(scope="module")
-def store() -> Iterator[S3RawStore]:
-    container = (
-        DockerContainer(SEAWEEDFS_IMAGE)
-        .with_env("AWS_ACCESS_KEY_ID", KEY)
-        .with_env("AWS_SECRET_ACCESS_KEY", SECRET)
-        .with_env("S3_BUCKET", BUCKET)
-        .with_exposed_ports(8333)
-        .waiting_for(HttpWaitStrategy(8333, "/healthz").for_status_code(200))
-    )
-    with container:
-        endpoint = f"http://{container.get_container_host_ip()}:{container.get_exposed_port(8333)}"
-        yield S3RawStore.connect(endpoint, BUCKET, KEY, SECRET)
+def store(s3_endpoint: str) -> S3RawStore:
+    store = S3RawStore.connect(s3_endpoint, BUCKET, env("S3_ACCESS_KEY"), env("S3_SECRET_KEY"))
+    store._client.create_bucket(Bucket=BUCKET)
+    return store
 
 
 def _run(store: S3RawStore) -> tuple[int, int]:

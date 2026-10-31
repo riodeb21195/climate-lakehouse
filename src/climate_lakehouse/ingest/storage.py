@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 import boto3
 from botocore.exceptions import ClientError
 
+from climate_lakehouse.config import Settings
 from climate_lakehouse.ingest.dwd import RemoteFile
 
 if TYPE_CHECKING:
@@ -52,6 +53,12 @@ class S3RawStore:
             region_name="us-east-1",
         )
         return cls(client, bucket)
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "S3RawStore":
+        return cls.connect(
+            settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key
+        )
 
     def is_current(self, key: str, remote: RemoteFile) -> bool:
         """True if the stored object came from the same source version (Last-Modified + size)."""

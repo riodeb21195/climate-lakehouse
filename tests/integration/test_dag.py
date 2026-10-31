@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from tests.integration.test_transform_stack import _compose
+from tests.integration.conftest import compose
 
 pytestmark = pytest.mark.integration
 
@@ -25,9 +25,9 @@ print(json.dumps({
 
 @pytest.fixture(scope="module")
 def dag() -> dict[str, object]:
-    build = _compose("--profile", "jobs", "build", "jobs")
+    build = compose("--profile", "jobs", "build", "jobs")
     assert build.returncode == 0, build.stderr
-    result = _compose("run", "--rm", "--no-deps", "--entrypoint", "python", "jobs", "-c", INSPECT)
+    result = compose("run", "--rm", "--no-deps", "--entrypoint", "python", "jobs", "-c", INSPECT)
     assert result.returncode == 0, result.stderr[-3000:]
     parsed: dict[str, object] = json.loads(result.stdout.strip().splitlines()[-1])
     return parsed
@@ -49,7 +49,7 @@ def test_commands_target_existing_job_modules(dag: dict[str, object]) -> None:
     modules = {t: c["command"].split()[2] for t, c in tasks.items()}
     check = "; ".join(f"import {m}" for m in modules.values())
     venv_python = "/opt/climate/.venv/bin/python"
-    result = _compose("run", "--rm", "--no-deps", "--entrypoint", venv_python, "jobs", "-c", check)
+    result = compose("run", "--rm", "--no-deps", "--entrypoint", venv_python, "jobs", "-c", check)
     assert result.returncode == 0, result.stderr[-2000:]
     # only silver and gold take the backfill flag; only the download retries
     assert [t for t, c in tasks.items() if "full_refresh" in c["command"]] == ["silver", "gold"]
