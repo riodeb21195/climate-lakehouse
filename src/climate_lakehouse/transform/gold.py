@@ -1,8 +1,9 @@
-"""Gold: yearly climate indicators per station, and their decade means per federal state.
+"""Gold: Klimakennzahlen je Station und Jahr und ihre Dekadenmittel je Bundesland.
 
-gold.station_year is overwritten per decade partition: only decades with silver rows loaded
-after the last gold run are recomputed. gold.state_decade is small and depends on every
-station-year (reference period), so it is replaced as a whole whenever station_year changes.
+gold.station_year wird je Dekaden-Partition überschrieben: Neu berechnet werden nur Dekaden mit
+Silver-Zeilen, die nach dem letzten Gold-Lauf geladen wurden. gold.state_decade ist klein und
+hängt von allen Stationsjahren ab (Referenzperiode); es wird deshalb bei jeder Änderung von
+station_year komplett ersetzt.
 """
 
 import argparse
@@ -34,14 +35,14 @@ from climate_lakehouse.transform.tables import (
 log = logging.getLogger(__name__)
 
 WATERMARK = "climate.silver-loaded-until"
-# A station-year counts for an indicator only if ~90 % of its days have the needed value;
-# otherwise gaps would show up as fewer heat or frost days.
+# Ein Stationsjahr zählt für eine Kennzahl nur, wenn ~90 % seiner Tage den nötigen Wert
+# haben; sonst würden Lücken als weniger Hitze- oder Frosttage erscheinen.
 MIN_DAYS = 330
 REFERENCE_YEARS = (1961, 1990)
 
-# indicator -> (aggregate over the days of a year, silver column it needs). Thresholds are the
-# DWD definitions: hot day Tmax >= 30 °C, frost day Tmin < 0 °C, heavy rain >= 20 mm,
-# tropical night Tmin >= 20 °C.
+# Kennzahl -> (Aggregat über die Tage eines Jahres, benötigte Silver-Spalte). Schwellen nach
+# DWD-Definition: Hitzetag Tmax >= 30 °C, Frosttag Tmin < 0 °C, Starkregen >= 20 mm,
+# Tropennacht Tmin >= 20 °C.
 INDICATORS = {
     "heat_days": ("count_if(temp_max_c >= 30)", "temp_max_c"),
     "frost_days": ("count_if(temp_min_c < 0)", "temp_min_c"),
@@ -84,10 +85,10 @@ def build_station_year(daily: DataFrame, stations: DataFrame) -> DataFrame:
 
 
 def build_state_decade(station_year: DataFrame) -> DataFrame:
-    """Decade means per state, and their difference to the 1961-1990 reference.
+    """Dekadenmittel je Bundesland und ihre Abweichung zur Referenz 1961-1990.
 
-    The difference is averaged over per-station anomalies (value minus the station's own
-    reference mean), so stations opening or closing do not shift a state's result.
+    Die Abweichung ist das Mittel der Anomalien je Station (Wert minus eigenes Referenzmittel),
+    damit neue oder geschlossene Stationen das Ergebnis eines Landes nicht verschieben.
     """
     first, last = REFERENCE_YEARS
     by_station = Window.partitionBy("station_id")
@@ -130,7 +131,7 @@ def run_gold(
     summary = GoldSummary(run_id=run_id or str(uuid.uuid4()), full_refresh=full_refresh)
     ensure_tables(spark)
     daily = spark.table(SILVER_DAILY)
-    # A row moved to the rejected table is gone from daily: its decade changed as well.
+    # Eine abgelehnte Zeile fehlt danach in daily: Auch ihre Dekade hat sich geändert.
     changes = daily.select("measure_date", "loaded_at").unionByName(
         spark.table(SILVER_REJECTED).select("measure_date", "loaded_at")
     )

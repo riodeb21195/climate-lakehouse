@@ -1,4 +1,4 @@
-"""HTTP GET with timeout, rate limit and exponential backoff for retryable failures only."""
+"""HTTP-GET mit Timeout, Rate Limit und exponentiellem Backoff nur bei wiederholbaren Fehlern."""
 
 import logging
 import random
@@ -15,7 +15,7 @@ MAX_BACKOFF_S = 60.0
 
 
 class RateLimiter:
-    """Allows at most `per_second` calls per second across all threads."""
+    """Erlaubt höchstens `per_second` Aufrufe pro Sekunde über alle Threads."""
 
     def __init__(self, per_second: float, clock: Callable[[], float] = time.monotonic) -> None:
         self._interval = 1.0 / per_second
@@ -49,7 +49,7 @@ class HttpClient:
         self._sleep = sleep
 
     def get(self, url: str) -> bytes:
-        """Return the body; raise on non-retryable errors or once retries are exhausted."""
+        """Liefert den Body; wirft bei nicht wiederholbaren Fehlern oder nach dem letzten Retry."""
         attempt = 0
         while True:
             self._limiter.wait()
@@ -76,7 +76,7 @@ class HttpClient:
             attempt += 1
 
     def _backoff(self, attempt: int) -> float:
-        # Full jitter keeps parallel workers from retrying in lockstep.
+        # Full Jitter verhindert, dass parallele Worker im Gleichschritt wiederholen.
         return random.uniform(0, min(MAX_BACKOFF_S, self._backoff_base_s * 2**attempt))
 
     def close(self) -> None:

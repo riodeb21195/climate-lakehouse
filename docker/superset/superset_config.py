@@ -1,4 +1,4 @@
-"""Superset settings for the local dashboard. Only what differs from Superset's defaults."""
+"""Superset-Einstellungen für das lokale Dashboard. Nur, was von den Defaults abweicht."""
 
 import os
 from typing import Any
@@ -8,13 +8,13 @@ from sqlalchemy.engine import Engine
 
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 SQLALCHEMY_DATABASE_URI = "sqlite:////app/superset_home/superset.db"
-# Charts render in the browser; there are no alerts, reports or thumbnails to compute.
+# Diagramme rendern im Browser; Alerts, Reports und Thumbnails gibt es nicht.
 FEATURE_FLAGS = {"ALERT_REPORTS": False, "THUMBNAILS": False}
 
 
 @event.listens_for(Engine, "connect")
 def _attach_lakehouse(dbapi_connection: Any, _record: Any) -> None:
-    """Give every DuckDB connection access to the lakehouse as catalog `lakehouse`."""
+    """Gibt jeder DuckDB-Verbindung Zugriff auf das Lakehouse als Katalog `lakehouse`."""
     if type(dbapi_connection).__module__.split(".")[0] not in {"duckdb", "duckdb_engine"}:
         return
     env = os.environ

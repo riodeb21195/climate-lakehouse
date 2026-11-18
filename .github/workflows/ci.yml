@@ -16,7 +16,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      # Iceberg jars that the Spark unit tests resolve from Maven
+      # Iceberg-JARs, die die Spark-Unit-Tests aus Maven laden
       - uses: actions/cache@v6
         with:
           path: ~/.ivy2.5.2

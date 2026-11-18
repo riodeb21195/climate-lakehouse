@@ -1,4 +1,4 @@
-"""SparkSession wired to the Iceberg REST catalog (Lakekeeper) and the S3 store (SeaweedFS)."""
+"""SparkSession mit Iceberg-REST-Katalog (Lakekeeper) und S3-Speicher (SeaweedFS)."""
 
 import logging
 import sys
@@ -22,8 +22,8 @@ def rest_catalog_conf(settings: Settings) -> dict[str, str]:
         f"{prefix}.uri": settings.catalog_uri,
         f"{prefix}.warehouse": settings.warehouse,
         f"{prefix}.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
-        # Lakekeeper vends neither credentials nor signed requests (ADR 0002), so the
-        # client brings its own S3 access key.
+        # Lakekeeper stellt weder Zugangsdaten noch signierte Requests aus (ADR 0002),
+        # deshalb bringt der Client seinen eigenen S3-Schlüssel mit.
         f"{prefix}.s3.endpoint": settings.s3_endpoint,
         f"{prefix}.s3.path-style-access": "true",
         f"{prefix}.s3.access-key-id": settings.s3_access_key,
@@ -35,7 +35,7 @@ def rest_catalog_conf(settings: Settings) -> dict[str, str]:
 def build_session(
     app_name: str, settings: Settings, catalog_conf: dict[str, str] | None = None
 ) -> SparkSession:
-    """Create the session; `catalog_conf` replaces the REST catalog (tests use a local one)."""
+    """Erzeugt die Session; `catalog_conf` ersetzt den REST-Katalog (Tests nutzen einen lokalen)."""
     conf = {
         "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
         "spark.sql.defaultCatalog": CATALOG,
@@ -46,7 +46,7 @@ def build_session(
         "spark.driver.memory": settings.spark_driver_memory,
         "spark.pyspark.python": sys.executable,
         "spark.ui.enabled": "false",
-        "spark.ui.showConsoleProgress": "false",  # progress bars would break the JSON log
+        "spark.ui.showConsoleProgress": "false",  # Fortschrittsbalken würden das JSON-Log zerstören
         **(catalog_conf if catalog_conf is not None else rest_catalog_conf(settings)),
     }
     if settings.spark_jars:
@@ -57,7 +57,7 @@ def build_session(
     builder = SparkSession.builder.appName(app_name).master(settings.spark_master)
     for key, value in conf.items():
         builder = builder.config(key, value)
-    # py4j logs every connection at INFO, and after shutdown into a closed stream
+    # py4j loggt jede Verbindung auf INFO, nach dem Beenden sogar in einen geschlossenen Stream
     logging.getLogger("py4j").setLevel(logging.WARNING)
     session = builder.getOrCreate()
     session.sparkContext.setLogLevel("WARN")

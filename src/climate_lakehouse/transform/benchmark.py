@@ -1,7 +1,8 @@
-"""Query times on silver as built (partitioned by year, sorted by station) against a baseline copy.
+"""Abfragezeiten auf Silver (nach Jahr partitioniert, nach Station sortiert) gegen eine Kopie.
 
-The baseline is the same data unpartitioned in delivery order (station by station, as the DWD
-files arrive). Each query runs once to warm up and then `--repeat` times; the median counts.
+Die Vergleichskopie enthält dieselben Daten unpartitioniert in Lieferreihenfolge (Station für
+Station, wie die DWD-Dateien ankommen). Jede Abfrage läuft einmal zum Aufwärmen und dann
+`--repeat`-mal; es zählt der Median.
 """
 
 import argparse
@@ -45,7 +46,7 @@ class BenchmarkSummary(JobSummary):
 
 
 def _time(spark: SparkSession, sql: str, repeat: int) -> list[float]:
-    spark.sql(sql).collect()  # warm-up: JVM, catalog and S3 connections
+    spark.sql(sql).collect()  # Aufwärmen: JVM, Katalog und S3-Verbindungen
     runs = []
     for _ in range(repeat):
         start = time.perf_counter()

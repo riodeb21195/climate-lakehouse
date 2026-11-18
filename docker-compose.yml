@@ -1,4 +1,5 @@
-# Memory limits keep the whole stack inside a ~4.8 GiB Docker VM (see README, "Speicherbudget").
+# Die Speicherlimits halten den ganzen Stack in einer Docker-VM mit ~4,8 GiB
+# (siehe docs/architecture.md, "Speicherbudget").
 name: climate-lakehouse
 
 x-lakekeeper-env: &lakekeeper-env
@@ -7,7 +8,7 @@ x-lakekeeper-env: &lakekeeper-env
   LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/lakekeeper
   RUST_LOG: info
 
-# Airflow and the jobs share one image (docker/Dockerfile).
+# Airflow und die Jobs teilen sich ein Image (docker/Dockerfile).
 x-airflow: &airflow
   build:
     context: .
@@ -24,7 +25,8 @@ x-airflow: &airflow
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
-    # Local stack only: every visitor of the UI is admin, no login (README, "Grenzen")
+    # Nur für den lokalen Stack: Jeder Besucher der UI ist Admin, ohne Login
+    # (docs/design-decisions.md, "Grenzen")
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
     AIRFLOW__API__WORKERS: 1
     STATION_LIMIT: ${STATION_LIMIT:-50}
@@ -35,7 +37,7 @@ x-airflow: &airflow
     S3_ACCESS_KEY: ${S3_ACCESS_KEY}
     S3_SECRET_KEY: ${S3_SECRET_KEY}
     WAREHOUSE: ${WAREHOUSE}
-    # Inside the Docker network; .env holds the host-side addresses
+    # Im Docker-Netz; die .env enthält die Adressen vom Host aus
     S3_ENDPOINT: http://seaweedfs:8333
     CATALOG_URI: http://lakekeeper:8181/catalog
     SPARK_DRIVER_MEMORY: 1536m
@@ -60,7 +62,7 @@ services:
 
   seaweedfs:
     image: chrislusf/seaweedfs:4.51
-    # Upload and read buffers capped so that Spark's parallel writes fit the memory limit
+    # Upload- und Lesepuffer begrenzt, damit Sparks parallele Schreibvorgänge ins Limit passen
     command:
       - mini
       - -dir=/data
@@ -80,8 +82,8 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8333/healthz || exit 1"]
       interval: 5s
       retries: 20
-    # 256m without buffer caps was OOM-killed while bronze wrote the 50-station sample;
-    # with caps it peaked at 380 MiB during an Airflow run (2026-10-29)
+    # Mit 256m ohne Pufferlimits per OOM beendet, als Bronze die 50 Stationen schrieb;
+    # mit Limits lag die Spitze bei 380 MiB während eines Airflow-Laufs (2026-10-29)
     mem_limit: 512m
     restart: unless-stopped
 
@@ -128,8 +130,8 @@ services:
     restart: "no"
     mem_limit: 32m
 
-  # Orchestration. The scheduler runs the tasks itself (LocalExecutor), so the Spark driver of
-  # a job lives in the scheduler container: one job at a time, see the DAG.
+  # Orchestrierung. Der Scheduler führt die Tasks selbst aus (LocalExecutor), der Spark-Driver
+  # eines Jobs läuft also im Scheduler-Container: ein Job zur Zeit, siehe DAG.
   airflow-init:
     <<: *airflow
     command: ["bash", "-c", "airflow db migrate"]
@@ -164,7 +166,7 @@ services:
       start_period: 30s
     depends_on:
       <<: *after-init
-      # Tasks report to the Execution API; started earlier, the first task was killed.
+      # Tasks melden sich bei der Execution API; früher gestartet, wurde der erste Task beendet.
       airflow-api-server:
         condition: service_healthy
       lakekeeper-bootstrap:
@@ -182,7 +184,7 @@ services:
     depends_on: *after-init
     mem_limit: 384m
 
-  # Single jobs on demand (make bronze, ...): same image, without Airflow.
+  # Einzelne Jobs bei Bedarf (make bronze, ...): dasselbe Image, ohne Airflow.
   jobs:
     <<: *airflow
     entrypoint: ["/opt/climate/.venv/bin/python", "-m"]
@@ -194,7 +196,7 @@ services:
         condition: service_completed_successfully
     mem_limit: 2g
 
-  # Dashboard, started on demand (make dashboard). DuckDB inside Superset reads gold directly.
+  # Dashboard, bei Bedarf gestartet (make dashboard). DuckDB in Superset liest Gold direkt.
   superset:
     build:
       context: .

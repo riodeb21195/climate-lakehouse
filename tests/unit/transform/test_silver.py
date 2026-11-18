@@ -23,7 +23,7 @@ from tests.unit.transform.test_bronze import _edit_product
 
 DRESDEN_RECENT_KEY = raw_key("recent", DRESDEN_RECENT_ZIP)
 DRESDEN = "station_id = '01048'"
-FX, SDK = 3, 8  # field positions in produkt_klima_tag
+FX, SDK = 3, 8  # Feldpositionen in produkt_klima_tag
 
 
 def _watermark(spark: SparkSession) -> str | None:
@@ -32,7 +32,7 @@ def _watermark(spark: SparkSession) -> str | None:
 
 
 def _set_recent_value(raw: MemoryRawReader, day: str, field: int, value: str) -> None:
-    """Publish a new version of the Dresden recent file with one field of one day changed."""
+    """Veröffentlicht eine neue Version der Dresdner recent-Datei mit einem geänderten Feld."""
     body = raw.objects[DRESDEN_RECENT_KEY][0]
     archive = zipfile.ZipFile(io.BytesIO(body))
     member = next(m for m in archive.namelist() if m.startswith("produkt_klima_tag"))
@@ -56,7 +56,7 @@ def test_builds_one_clean_row_per_station_and_day(
     assert summary.rows_rejected == 0
     daily = spark.table(SILVER_DAILY)
     dresden = daily.where(DRESDEN)
-    # 1945 is before START_YEAR; 12 days of 1960/61, 17 of Dec 2025, 10 of Jan 2026
+    # 1945 liegt vor START_YEAR; 12 Tage aus 1960/61, 17 aus Dez. 2025, 10 aus Jan. 2026
     assert dresden.count() == 12 + 17 + 10
     assert dresden.where("year(measure_date) < 1950").count() == 0
 
@@ -70,7 +70,7 @@ def test_builds_one_clean_row_per_station_and_day(
     assert day is not None
     assert (day.temp_mean_c, day.temp_max_c, day.temp_min_c) == (1.0, 2.4, 0.0)
     assert (day.precipitation_mm, day.sunshine_h, day.snow_depth_cm) == (0.3, 0.0, 2)
-    assert day.wind_gust_max_ms is None  # -999 in the source
+    assert day.wind_gust_max_ms is None  # -999 in der Quelle
 
     assert daily.count() == summary.rows_valid
     assert spark.table(SILVER_STATIONS).where(DRESDEN).first().state == "Sachsen"  # type: ignore[union-attr]
@@ -112,10 +112,10 @@ def test_implausible_row_moves_to_rejected_table(
     run_bronze(spark, settings, raw)
     run_silver(spark, settings)
 
-    # sunshine of 45 h on 2026-01-02: a decoding error, not weather
+    # 45 h Sonne am 2026-01-02: ein Dekodierfehler, kein Wetter
     _set_recent_value(raw, "20260102", SDK, "45.000")
     run_bronze(spark, settings, raw)
-    # the ratio refers to the recomputed station only: 1 of 39 rows
+    # die Quote bezieht sich nur auf die neu berechnete Station: 1 von 39 Zeilen
     summary = run_silver(spark, settings.model_copy(update={"max_reject_ratio": 0.05}))
 
     assert summary.rows_rejected == 1
@@ -154,7 +154,7 @@ def test_full_refresh_drops_rows_before_new_start_year(
     run_silver(spark, settings)
 
     later = settings.model_copy(update={"start_year": 2000})
-    assert run_silver(spark, later).stations_recomputed == 0  # nothing new in bronze
+    assert run_silver(spark, later).stations_recomputed == 0  # nichts Neues in Bronze
     summary = run_silver(spark, later, full_refresh=True)
 
     assert summary.stations_recomputed == 2
@@ -164,7 +164,7 @@ def test_full_refresh_drops_rows_before_new_start_year(
 def test_silver_is_written_in_station_order(spark: SparkSession) -> None:
     ensure_tables(spark)
     log_entries = spark.sql(f"SELECT * FROM {SILVER_DAILY}.metadata_log_entries").count()
-    ensure_tables(spark)  # the sort order is only set once
+    ensure_tables(spark)  # die Sortierung wird nur einmal gesetzt
 
     order = read_property(spark, SILVER_DAILY, "sort-order")
     assert order == "station_id ASC NULLS FIRST, measure_date ASC NULLS FIRST"

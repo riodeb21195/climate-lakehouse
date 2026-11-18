@@ -1,4 +1,4 @@
-"""All Spark jobs in the pipeline image against the real stack (Lakekeeper, SeaweedFS)."""
+"""Alle Spark-Jobs im Pipeline-Image gegen den echten Stack (Lakekeeper, SeaweedFS)."""
 
 import json
 from typing import Any
@@ -28,7 +28,7 @@ FILES = {
 
 @pytest.fixture(scope="module")
 def stack(s3_endpoint: str) -> S3RawStore:
-    """The stack with the fixture files in its raw zone."""
+    """Der Stack mit den Fixture-Dateien in seiner Raw-Zone."""
     store = S3RawStore.connect(
         s3_endpoint, env("S3_BUCKET"), env("S3_ACCESS_KEY"), env("S3_SECRET_KEY")
     )
@@ -40,7 +40,7 @@ def stack(s3_endpoint: str) -> S3RawStore:
 
 
 def _run_job(module: str) -> dict[str, Any]:
-    """Run a job in the pipeline image and return its final summary log record."""
+    """Führt einen Job im Pipeline-Image aus; liefert den abschließenden Log-Eintrag."""
     result = compose("run", "--rm", "--no-deps", "jobs", module)
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-3000:]
     records = [json.loads(x) for x in result.stdout.splitlines() if x.startswith("{")]
@@ -61,7 +61,7 @@ def test_pipeline_writes_iceberg_tables_through_the_catalog(stack: S3RawStore) -
     reconcile = _run_job("climate_lakehouse.transform.reconcile")
     assert [c["passed"] for c in reconcile["checks"]] == [True, True, True]
 
-    # Data and metadata files land in the warehouse prefix of the bucket
+    # Daten- und Metadatendateien landen unter dem Warehouse-Präfix des Buckets
     listing = stack._client.list_objects_v2(Bucket=env("S3_BUCKET"), Prefix="warehouse/")
     assert any(o["Key"].endswith(".parquet") for o in listing.get("Contents", []))
 

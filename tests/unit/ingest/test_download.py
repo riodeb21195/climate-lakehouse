@@ -23,11 +23,11 @@ def _http(overrides: dict[str, bytes] | None = None) -> HttpClient:
 
 def test_downloads_selected_station_and_reports_missing_file() -> None:
     store = MemoryStore()
-    # limit 0 selects all 10 fixture stations; only 15194 and 00044 have files listed
+    # limit 0 wählt alle 10 Fixture-Stationen; nur 15194 und 00044 haben gelistete Dateien
     summary = download.run_download(_settings(0), _http(), store, today=TODAY)
 
     assert summary.stations_selected == 10
-    assert summary.files_planned == 5  # station list + 2 historical + 2 recent
+    assert summary.files_planned == 5  # Stationsliste + 2 historical + 2 recent
     assert summary.files_downloaded == 3
     assert summary.status == "failed"
     assert len(summary.errors) == 2
@@ -65,7 +65,7 @@ def test_invalid_archive_is_not_stored() -> None:
 
 
 def test_sample_selection_filters_by_reference_period() -> None:
-    # 15194 starts in 2024, so a sample run (limit > 0) must not pick it
+    # 15194 beginnt 2024, eine Stichprobe (limit > 0) darf sie also nicht wählen
     store = MemoryStore()
     summary = download.run_download(_settings(3), _http(), store, today=TODAY)
     assert summary.stations_selected == 3

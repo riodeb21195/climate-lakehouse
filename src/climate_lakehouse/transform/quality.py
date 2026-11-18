@@ -1,7 +1,8 @@
-"""Data quality rules for silver, written in plain PySpark.
+"""Datenqualitätsregeln für Silver, in reinem PySpark.
 
-Row rules decide per row: a row that breaks one goes to the rejected table together with the
-names of the rules it broke. Gates decide per run: if one fails, nothing is written.
+Zeilenregeln entscheiden je Zeile: Eine Zeile, die eine Regel verletzt, geht mit den Namen der
+verletzten Regeln in die Ablehnungstabelle. Gates entscheiden je Lauf: Schlägt eines fehl, wird
+nichts geschrieben.
 """
 
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from pyspark.sql import functions as F
 
 
 class QualityGateError(RuntimeError):
-    """A run-level quality gate failed; the run must not publish its result."""
+    """Ein Gate ist fehlgeschlagen; der Lauf darf sein Ergebnis nicht veröffentlichen."""
 
     def __init__(self, results: list["GateResult"]) -> None:
         self.results = results
@@ -22,11 +23,12 @@ class QualityGateError(RuntimeError):
 @dataclass(frozen=True)
 class RowRule:
     name: str
-    passes: str  # Spark SQL condition; null (a value is missing) counts as passing
+    passes: str  # Spark-SQL-Bedingung; null (Wert fehlt) gilt als bestanden
 
 
-# Limits are generous physical bounds for Germany, not climatological thresholds: they catch
-# unit and decoding errors, not extreme weather (records: 41.2 °C, -37.8 °C, 312 mm/day).
+# Großzügige physikalische Grenzen für Deutschland, keine klimatologischen Schwellen: Sie
+# fangen Einheiten- und Dekodierfehler, kein Extremwetter (Rekorde: 41,2 °C, -37,8 °C,
+# 312 mm/Tag).
 ROW_RULES = [
     RowRule(
         "temperature_range",
@@ -48,7 +50,7 @@ ROW_RULES = [
 
 
 def apply_row_rules(df: DataFrame, rules: list[RowRule] = ROW_RULES) -> DataFrame:
-    """Add `failed_rules`: the names of all rules the row breaks (empty if it passes all)."""
+    """Ergänzt `failed_rules`: die Namen aller verletzten Regeln (leer, wenn alle bestanden)."""
     failures = [
         F.when(~F.coalesce(F.expr(rule.passes), F.lit(True)), F.lit(rule.name)) for rule in rules
     ]
@@ -67,7 +69,7 @@ class GateResult:
 def check_gates(
     checked: DataFrame, stations: DataFrame, keys: list[str], max_reject_ratio: float
 ) -> list[GateResult]:
-    """Run-level checks on the output of `apply_row_rules`."""
+    """Prüfungen je Lauf auf dem Ergebnis von `apply_row_rules`."""
     total = checked.count()
     rejected = checked.where(F.size("failed_rules") > 0).count()
     ratio = rejected / total if total else 0.0

@@ -1,8 +1,9 @@
-"""Silver: one validated row per station and day since START_YEAR, in readable units.
+"""Silver: eine geprüfte Zeile je Station und Tag ab START_YEAR, in lesbaren Einheiten.
 
-Only stations with bronze rows loaded after the last silver run are recomputed. The run
-watermark is a table property of silver.daily_observations and only moves after all writes
-succeeded, so a failed run is simply repeated by the next one.
+Neu berechnet werden nur Stationen mit Bronze-Zeilen, die nach dem letzten Silver-Lauf geladen
+wurden. Die Watermark ist eine Tabelleneigenschaft von silver.daily_observations und rückt erst
+vor, wenn alle Schreibvorgänge erfolgreich waren; einen gescheiterten Lauf wiederholt also
+einfach der nächste.
 """
 
 import argparse
@@ -56,9 +57,9 @@ class SilverSummary(JobSummary):
 
 
 def build_daily(bronze: DataFrame, start_year: int) -> DataFrame:
-    """Merge historical and recent rows, translate missing markers and rename columns.
+    """Führt historical und recent zusammen, übersetzt Fehlwerte und benennt Spalten um.
 
-    Where both exist for a day, the quality-controlled historical value wins over recent.
+    Gibt es für einen Tag beide, gewinnt der qualitätsgeprüfte historical-Wert.
     """
     priority = F.when(F.col("source_kind") == "historical", 0).otherwise(1)
     window = Window.partitionBy(*KEYS).orderBy(priority)

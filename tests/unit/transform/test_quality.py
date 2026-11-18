@@ -42,11 +42,11 @@ def test_missing_values_pass(spark: SparkSession) -> None:
     ("index", "value", "rule"),
     [
         (3, -60.0, "temperature_range"),
-        (2, 3.0, "temperature_order"),  # minimum above mean
+        (2, 3.0, "temperature_order"),  # Minimum über dem Mittel
         (4, -0.1, "precipitation_range"),
         (5, 18.0, "sunshine_range"),
         (7, 101.0, "humidity_range"),
-        (9, 12.0, "wind_range"),  # mean above gust
+        (9, 12.0, "wind_range"),  # Mittel über der Böe
     ],
 )
 def test_breaking_rule_is_named(spark: SparkSession, index: int, value: float, rule: str) -> None:

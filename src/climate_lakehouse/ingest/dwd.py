@@ -1,4 +1,4 @@
-"""Parsing of DWD open-data artefacts: directory listings, station list, file names."""
+"""Parser für DWD-Open-Data: Verzeichnislisten, Stationsliste, Dateinamen."""
 
 import re
 from collections import defaultdict
@@ -18,24 +18,24 @@ STATION_LIST_COLUMNS = (
     "Abgabe",
 )
 
-# nginx autoindex row: <a href="name">name</a>   28-Oct-2026 09:05:14   34407
+# Zeile im nginx-Autoindex: <a href="name">name</a>   28-Oct-2026 09:05:14   34407
 _LISTING_ROW = re.compile(
     r'<a href="([^"/]+)">[^<]*</a>\s+(\d{2}-\w{3}-\d{4} \d{2}:\d{2}(?::\d{2})?)\s+(\d+)'
 )
 _STATION_IN_NAME = re.compile(r"^tageswerte_KL_(\d{5})_")
-# id, from, to, height, lat, lon, then the free-text columns
+# ID, von, bis, Höhe, Breite, Länge, danach die Freitextspalten
 _STATION_ROW = re.compile(r"^(\d+) +(\d{8}) +(\d{8}) +(-?\d+) +(-?[\d.]+) +(-?[\d.]+) (.*)$")
 
 
 class FormatError(ValueError):
-    """Source data does not have the structure the pipeline expects."""
+    """Die Quelldaten haben nicht die Struktur, die die Pipeline erwartet."""
 
 
 @dataclass(frozen=True)
 class RemoteFile:
     name: str
     url: str
-    last_modified: str  # as printed by the server; only compared for equality
+    last_modified: str  # wie vom Server ausgegeben; nur auf Gleichheit verglichen
     size: int
 
     @property
@@ -69,11 +69,12 @@ def parse_listing(html: str, base_url: str) -> list[RemoteFile]:
 
 
 def parse_station_list(text: str) -> list[Station]:
-    """Parse the station list.
+    """Liest die Stationsliste.
 
-    The dashed separator does not match the data columns, so rows are split by content: six
-    numeric fields separated by spaces, then name, state and an optional "Abgabe" column
-    separated by at least two spaces (names are at most 36 characters in a 41-character field).
+    Die Trennlinie aus Bindestrichen passt nicht zu den Datenspalten, deshalb werden die Zeilen
+    nach Inhalt zerlegt: sechs Zahlenfelder mit Leerzeichen getrennt, dann Name, Bundesland und
+    eine optionale Spalte "Abgabe", getrennt durch mindestens zwei Leerzeichen (Namen haben
+    höchstens 36 Zeichen in einem 41 Zeichen breiten Feld).
     """
     lines = text.splitlines()
     if not lines or tuple(lines[0].split()) != STATION_LIST_COLUMNS:
@@ -108,10 +109,10 @@ def parse_station_list(text: str) -> list[Station]:
 def select_stations(
     stations: list[Station], limit: int, reference_start: date, active_since: date
 ) -> list[str]:
-    """Pick up to `limit` stations that cover the reference period and still report.
+    """Wählt bis zu `limit` Stationen, die die Referenzperiode abdecken und noch melden.
 
-    Stations are taken round-robin per federal state so that a small sample still covers every
-    region. `limit=0` returns all stations without filtering.
+    Die Stationen werden reihum je Bundesland gewählt, damit auch eine kleine Stichprobe jede
+    Region abdeckt. `limit=0` liefert alle Stationen ohne Filter.
     """
     if limit == 0:
         return sorted(s.station_id for s in stations)

@@ -21,7 +21,7 @@ from tests.unit.transform.test_silver import SDK, _set_recent_value
 
 
 class _SharedSession:
-    """Hands the shared test session to run_job, which would otherwise stop it."""
+    """Gibt run_job die gemeinsame Test-Session, die es sonst stoppen würde."""
 
     def __init__(self, spark: SparkSession) -> None:
         self._spark = spark
@@ -97,7 +97,7 @@ def test_reconciliation_detects_raw_files_missing_from_bronze(
     run_gold(spark, settings)
     assert all(c.passed for c in run_reconcile(spark, settings, raw).checks)
 
-    # a file arrives after bronze ran
+    # eine Datei kommt an, nachdem Bronze gelaufen ist
     body = raw.objects[raw_key("recent", DRESDEN_RECENT_ZIP)][0]
     late = DRESDEN_RECENT_ZIP.replace("01048", "01049")
     raw.put(raw_key("recent", late), body, FIXTURE_TIME + timedelta(days=1))

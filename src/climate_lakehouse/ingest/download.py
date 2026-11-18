@@ -1,7 +1,7 @@
-"""Incremental, resumable download of DWD daily climate files into the raw zone.
+"""Inkrementeller, fortsetzbarer Download der DWD-Tageswerte in die Raw-Zone.
 
-A file is fetched only if the raw zone does not already hold the same source version, so an
-interrupted run simply continues where it stopped and a repeated run transfers nothing.
+Eine Datei wird nur geladen, wenn die Raw-Zone nicht schon denselben Quellstand hat. Ein
+abgebrochener Lauf macht deshalb dort weiter, wo er stand, ein doppelter Lauf überträgt nichts.
 """
 
 import logging
@@ -110,7 +110,7 @@ def run_download(
 def _process(
     kind: str, remote: RemoteFile, http: HttpClient, store: RawStore, run_id: str
 ) -> int | str | None:
-    """Fetch one archive: bytes stored, None if already current, or an error message."""
+    """Lädt ein Archiv: gespeicherte Bytes, None wenn schon aktuell, sonst eine Fehlermeldung."""
     key = raw_key(kind, remote.name)
     try:
         if store.is_current(key, remote):

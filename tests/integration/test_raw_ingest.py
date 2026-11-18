@@ -1,4 +1,4 @@
-"""Critical path of the ingest step against the real S3 server of the stack (SeaweedFS)."""
+"""Kritischer Pfad des Ingest-Schritts gegen den echten S3-Server des Stacks (SeaweedFS)."""
 
 import hashlib
 from datetime import UTC, date, datetime
@@ -15,7 +15,7 @@ from tests.unit.ingest.fakes import BASE, dwd_transport
 
 pytestmark = pytest.mark.integration
 
-# Its own bucket, so the raw zone the job tests load stays as they set it up.
+# Eigener Bucket, damit die Raw-Zone der Job-Tests so bleibt, wie sie sie angelegt haben.
 BUCKET = "raw-ingest-test"
 
 

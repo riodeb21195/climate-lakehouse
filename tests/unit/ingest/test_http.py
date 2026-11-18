@@ -50,7 +50,7 @@ def test_retries_server_errors_and_timeouts_with_growing_backoff() -> None:
     )
     assert client.get("https://x.test/a") == b"ok"
     assert len(sleeps) == 3
-    # full jitter: delay for attempt n lies in [0, base * 2**n]
+    # Full Jitter: Wartezeit für Versuch n liegt in [0, base * 2**n]
     assert all(0 <= s <= 2**i for i, s in enumerate(sleeps))
 
 

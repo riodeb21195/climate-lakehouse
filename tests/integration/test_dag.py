@@ -1,4 +1,4 @@
-"""The pipeline DAG imports in the real image and wires the jobs in the right order."""
+"""Der Pipeline-DAG lässt sich im echten Image importieren und verkettet die Jobs richtig."""
 
 import itertools
 import json
@@ -9,7 +9,7 @@ from tests.integration.conftest import compose
 
 pytestmark = pytest.mark.integration
 
-# Runs with Airflow's interpreter in the image; prints the DAG structure as JSON.
+# Läuft mit Airflows Interpreter im Image; gibt die DAG-Struktur als JSON aus.
 INSPECT = """
 import json, runpy
 dag = runpy.run_path("/opt/airflow/dags/climate_pipeline.py")["dag"]
@@ -51,7 +51,7 @@ def test_commands_target_existing_job_modules(dag: dict[str, object]) -> None:
     venv_python = "/opt/climate/.venv/bin/python"
     result = compose("run", "--rm", "--no-deps", "--entrypoint", venv_python, "jobs", "-c", check)
     assert result.returncode == 0, result.stderr[-2000:]
-    # only silver and gold take the backfill flag; only the download retries
+    # nur silver und gold bekommen das Backfill-Flag; nur download hat Retries
     assert [t for t, c in tasks.items() if "full_refresh" in c["command"]] == ["silver", "gold"]
     assert [t for t, c in tasks.items() if c["retries"]] == ["download"]
 

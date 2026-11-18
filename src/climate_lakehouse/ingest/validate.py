@@ -1,4 +1,4 @@
-"""Schema checks for downloaded files, run before anything is stored."""
+"""Schema-Prüfung heruntergeladener Dateien, bevor etwas gespeichert wird."""
 
 import io
 import re
@@ -32,7 +32,7 @@ _GEOGRAPHY = re.compile(r"^Metadaten_Geographie_(\d{5})\.txt$")
 
 
 def validate_kl_zip(name: str, content: bytes, station_id: str) -> None:
-    """Raise FormatError with a precise message if the archive is not a DWD daily-KL archive."""
+    """Wirft FormatError mit genauer Meldung, wenn das Archiv kein DWD-Tages-KL-Archiv ist."""
     try:
         archive = zipfile.ZipFile(io.BytesIO(content))
         broken = archive.testzip()

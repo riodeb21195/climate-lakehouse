@@ -69,14 +69,14 @@ def spark_session(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SparkSes
     }
     settings = Settings(_env_file=None, spark_master="local[2]")  # type: ignore[call-arg]
     session = build_session("tests", settings, local_catalog)
-    session.conf.set("spark.sql.shuffle.partitions", "1")  # fixtures are tiny
+    session.conf.set("spark.sql.shuffle.partitions", "1")  # die Fixtures sind winzig
     yield session
     session.stop()
 
 
 @pytest.fixture
 def spark(spark_session: SparkSession) -> Iterator[SparkSession]:
-    """The shared session, with all tables dropped after each test."""
+    """Die gemeinsame Session; nach jedem Test werden alle Tabellen gelöscht."""
     yield spark_session
     for namespace in ("bronze", "silver", "gold", "ops"):
         if spark_session.catalog.databaseExists(namespace):

@@ -1,8 +1,8 @@
-"""Daily climate pipeline: download -> bronze -> silver -> gold -> reconcile -> maintain.
+"""Tägliche Klima-Pipeline: download -> bronze -> silver -> gold -> reconcile -> maintain.
 
-Every job is idempotent and incremental, so a rerun only does what is left. A backfill (e.g.
-after changing START_YEAR or a quality rule) is a manual run with `full_refresh` set, which
-recomputes silver and gold from bronze.
+Jeder Job ist idempotent und inkrementell, ein erneuter Lauf erledigt also nur, was fehlt. Ein
+Backfill (z. B. nach Änderung von START_YEAR oder einer Qualitätsregel) ist ein manueller Lauf
+mit `full_refresh`, der Silver und Gold aus Bronze neu berechnet.
 """
 
 from datetime import datetime, timedelta
@@ -10,18 +10,18 @@ from datetime import datetime, timedelta
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG, Param
 
-# The jobs live in their own virtualenv in the image, apart from Airflow's dependencies.
+# Die Jobs liegen im Image in einem eigenen virtualenv, getrennt von Airflows Abhängigkeiten.
 JOB = "/opt/climate/.venv/bin/python -m climate_lakehouse."
 FULL_REFRESH = "{{ '--full-refresh' if params.full_refresh else '' }}"
 
 with DAG(
     dag_id="climate_pipeline",
     description="DWD daily climate data through bronze, silver and gold",
-    # DWD replaces the recent files during the night
+    # Der DWD ersetzt die recent-Dateien nachts
     schedule="0 6 * * *",
     start_date=datetime(2026, 10, 1),
     catchup=False,
-    max_active_runs=1,  # one Spark driver at a time fits the memory budget
+    max_active_runs=1,  # nur ein Spark-Driver gleichzeitig passt ins Speicherbudget
     params={
         "full_refresh": Param(
             False, type="boolean", description="recompute silver and gold completely (backfill)"
@@ -32,7 +32,7 @@ with DAG(
     download = BashOperator(
         task_id="download",
         bash_command=f"{JOB}ingest.download",
-        # only network trouble is worth a retry; the Spark jobs fail deterministically
+        # nur Netzwerkprobleme lohnen einen Retry; die Spark-Jobs scheitern deterministisch
         retries=2,
         retry_delay=timedelta(minutes=10),
     )

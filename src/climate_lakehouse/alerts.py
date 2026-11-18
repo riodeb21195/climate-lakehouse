@@ -1,4 +1,4 @@
-"""The single alert channel: always the log, optionally also a Slack webhook."""
+"""Der einzige Alarmkanal: immer das Log, optional zusätzlich ein Slack-Webhook."""
 
 import logging
 
@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 
 def send_alert(settings: Settings, title: str, detail: str) -> None:
-    """Report a failed run. Never raises: a broken alert channel must not hide the failure."""
+    """Meldet einen gescheiterten Lauf. Wirft nie: Ein kaputter Kanal darf ihn nicht verdecken."""
     log.error("ALERT %s", title, extra={"alert": title, "detail": detail})
     if settings.alert_channel != "slack":
         return

@@ -1,7 +1,7 @@
-"""Run bookkeeping shared by all Spark jobs: one row per run, one row per quality check.
+"""Laufprotokoll aller Spark-Jobs: eine Zeile je Lauf, eine Zeile je Qualitätsprüfung.
 
-`run_job` is the entry point of every job: it creates the session, records the run in
-ops.pipeline_runs and ops.quality_results (also when it fails) and raises the alert.
+`run_job` ist der Einstieg jedes Jobs: Es erzeugt die Session, schreibt den Lauf nach
+ops.pipeline_runs und ops.quality_results (auch wenn er scheitert) und löst den Alarm aus.
 """
 
 import json
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class JobSummary:
-    """What every job returns; it ends up as one row in ops.pipeline_runs."""
+    """Rückgabe jedes Jobs; landet als eine Zeile in ops.pipeline_runs."""
 
     run_id: str
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -83,7 +83,7 @@ def run_job(
     work: Work,
     session: Callable[[str, Settings], SparkSession] = build_session,
 ) -> int:
-    """Run one job and record its outcome; returns the process exit code."""
+    """Führt einen Job aus und protokolliert das Ergebnis; liefert den Exit-Code."""
     configure_logging()
     settings = get_settings()
     run_id = str(uuid.uuid4())
@@ -102,7 +102,7 @@ def run_job(
                 log.exception("could not record failed run", extra={"run_id": run_id})
             return 1
 
-        # Checks that only report (e.g. reconciliation) fail the run without raising.
+        # Prüfungen, die nur berichten (z. B. reconcile), lassen den Lauf ohne Exception scheitern.
         error = "; ".join(f"{c.name}: {c.detail}" for c in summary.checks if not c.passed)
         status = "failed" if error else "succeeded"
         details = asdict(summary)

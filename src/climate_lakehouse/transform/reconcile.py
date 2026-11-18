@@ -1,7 +1,7 @@
-"""Reconciliation: every layer accounts for all of its source, checked after each pipeline run.
+"""Abgleich nach jedem Pipeline-Lauf: Jede Schicht muss ihre gesamte Quelle abbilden.
 
-Unlike the quality gates, these checks write nothing and block nothing; a mismatch fails the
-run, is recorded in ops.quality_results and raises an alert.
+Anders als die Gates schreiben und blockieren diese Prüfungen nichts; eine Abweichung lässt den
+Lauf scheitern, steht in ops.quality_results und löst einen Alarm aus.
 """
 
 import sys

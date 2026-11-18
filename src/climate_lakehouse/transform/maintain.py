@@ -1,8 +1,9 @@
-"""Table maintenance: compaction and snapshot expiry, plus rollback to an earlier snapshot.
+"""Tabellenwartung: Kompaktierung und Snapshot-Ablauf, dazu Rollback auf frühere Snapshots.
 
-`compact` runs after every pipeline run: MERGE batches and daily updates leave small files
-behind, and every commit keeps the files of older snapshots alive until they expire.
-`rollback` sets a table back to the snapshot that was current at a given time (time travel).
+`compact` läuft nach jedem Pipeline-Lauf: MERGE-Batches und tägliche Updates hinterlassen kleine
+Dateien, und jeder Commit hält die Dateien älterer Snapshots am Leben, bis sie ablaufen.
+`rollback` setzt eine Tabelle auf den Snapshot zurück, der zu einem Zeitpunkt aktuell war
+(Time Travel).
 """
 
 import argparse
@@ -25,10 +26,10 @@ from climate_lakehouse.transform.tables import (
     ensure_tables,
 )
 
-# Tables that grow with every run; the others are small and replaced as a whole.
+# Tabellen, die mit jedem Lauf wachsen; die übrigen sind klein und werden ganz ersetzt.
 COMPACTED = [BRONZE_DAILY, SILVER_DAILY, SILVER_REJECTED, GOLD_STATION_YEAR]
 KEEP_SNAPSHOTS = 5
-KEEP_DAYS = 7  # snapshots younger than this stay available for rollback
+KEEP_DAYS = 7  # jüngere Snapshots bleiben für ein Rollback verfügbar
 
 
 @dataclass
@@ -56,7 +57,7 @@ def compact_table(spark: SparkSession, table: str) -> TableFiles:
     result = spark.sql(
         f"CALL {CATALOG}.system.rewrite_data_files("
         f"table => '{table}', strategy => '{strategy}', "
-        # a partition with two small files is already worth rewriting
+        # schon zwei kleine Dateien in einer Partition lohnen das Umschreiben
         "options => map('min-input-files', '2'))"
     ).first()
     assert result is not None
@@ -95,7 +96,7 @@ class RollbackSummary(JobSummary):
 def rollback(
     spark: SparkSession, table: str, to_timestamp: str, run_id: str | None = None
 ) -> RollbackSummary:
-    """Make the snapshot that was current at `to_timestamp` (UTC) the current one again."""
+    """Macht den Snapshot, der zu `to_timestamp` (UTC) aktuell war, wieder zum aktuellen."""
     started_at = datetime.now(UTC)
     row = spark.sql(
         f"CALL {CATALOG}.system.rollback_to_timestamp("

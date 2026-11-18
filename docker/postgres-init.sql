@@ -1,3 +1,3 @@
--- One Postgres instance serves both metadata stores; each gets its own database.
+-- Eine Postgres-Instanz für beide Metadatenspeicher; jeder bekommt eine eigene Datenbank.
 CREATE DATABASE lakekeeper;
 CREATE DATABASE airflow;

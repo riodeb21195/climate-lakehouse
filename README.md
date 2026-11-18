@@ -47,11 +47,11 @@ protokolliert Lauf und Prüfungen in `ops.pipeline_runs` und `ops.quality_result
 
 ## Highlights
 
-- **Inkrementell und idempotent:** Dateiversionen per SHA-256, Iceberg-`MERGE` nur für geänderte Stationen, Gold überschreibt nur geänderte Dekaden. Eine ältere Dateiversion überschreibt nie einen neueren Stand.
-- **Datenqualität ohne Framework:** eigene PySpark-Regeln und Gates. Abgelehnte Zeilen landen mit Regelnamen in einer eigenen Tabelle, `reconcile` gleicht Raw → Bronze → Silver → Gold ab ([ADR 0003](docs/adr/0003-inkrementelles-bronze-silver.md)).
-- **Fehlerszenarien getestet:** 12 Fälle, jeder mit Test, z. B. HTML-Fehlerseite statt ZIP, Korrektur eines Werts durch den DWD, doppelter Lauf ([Übersicht](docs/design-decisions.md#what-happens-when-)). Insgesamt 72 Tests, Coverage-Gate 80 %, mypy strict.
-- **Betrieb:** Kompaktierung und Snapshot-Ablauf, Rollback per Iceberg Time Travel, Alarme (Log, optional Slack), [Runbook](docs/runbook.md).
-- **CI/CD:** Integrationstests gegen den echten Compose-Stack. Nach grüner CI pusht die CD das Image nach GHCR. SeaweedFS ersetzt MinIO, weil MinIO archiviert ist ([ADR 0001](docs/adr/0001-seaweedfs-statt-minio.md)).
+- Jede Dateiversion wird per SHA-256 nur einmal geladen. Iceberg-`MERGE` schreibt nur geänderte Stationen neu, Gold nur geänderte Dekaden, und eine ältere Dateiversion überschreibt nie einen neueren Stand.
+- Die Datenqualität prüfen eigene PySpark-Regeln und Gates, kein Framework. Abgelehnte Zeilen landen mit Regelnamen in einer eigenen Tabelle, `reconcile` gleicht Raw → Bronze → Silver → Gold ab ([ADR 0003](docs/adr/0003-inkrementelles-bronze-silver.md)).
+- 12 Fehlerszenarien sind mit Tests abgedeckt, z. B. HTML-Fehlerseite statt ZIP, Korrektur eines Werts durch den DWD, doppelter Lauf ([Übersicht](docs/design-decisions.md#what-happens-when-)). Insgesamt 72 Tests, Coverage-Gate 80 %, mypy strict.
+- Für den Betrieb gibt es Kompaktierung, Snapshot-Ablauf, Rollback per Iceberg Time Travel und Alarme (Log, optional Slack), beschrieben im [Runbook](docs/runbook.md).
+- Die CI testet gegen den echten Compose-Stack, danach pusht die CD das Image nach GHCR. Als Objektspeicher dient SeaweedFS statt MinIO, weil MinIO archiviert ist ([ADR 0001](docs/adr/0001-seaweedfs-statt-minio.md)).
 
 ## Quickstart
 

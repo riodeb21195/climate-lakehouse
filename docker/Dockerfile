@@ -1,6 +1,7 @@
-# One image for orchestration and jobs: Airflow 3.3 runs the pipeline DAG, and its tasks start
-# the Spark jobs (local mode, Java 17, Iceberg jars baked in) in a separate virtualenv, so the
-# job dependencies (pandas, pyarrow, pyspark) never conflict with Airflow's own.
+# Ein Image für Orchestrierung und Jobs: Airflow 3.3 führt den Pipeline-DAG aus, seine Tasks
+# starten die Spark-Jobs (Local Mode, Java 17, Iceberg-JARs im Image) in einem eigenen
+# virtualenv, damit die Job-Abhängigkeiten (pandas, pyarrow, pyspark) nie mit Airflows eigenen
+# kollidieren.
 FROM apache/airflow:3.3.2-python3.12
 
 ARG ICEBERG_VERSION=1.12.0
@@ -22,9 +23,9 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never \
     UV_PYTHON=/usr/python/bin/python3.12 UV_PROJECT_ENVIRONMENT=/opt/climate/.venv
 
 WORKDIR /opt/climate
-# uv and its download cache (UV_CACHE_DIR of the base image) are only mounted while building,
-# so neither ends up in the image.
-# Dependencies first: this layer is reused as long as uv.lock does not change.
+# uv und sein Download-Cache (UV_CACHE_DIR des Basis-Images) sind nur beim Build gemountet und
+# landen nicht im Image.
+# Abhängigkeiten zuerst: Diese Schicht wird wiederverwendet, solange sich uv.lock nicht ändert.
 COPY pyproject.toml uv.lock ./
 RUN --mount=from=ghcr.io/astral-sh/uv:0.11.19,source=/uv,target=/usr/local/bin/uv \
     --mount=type=cache,target=/tmp/.cache/uv \

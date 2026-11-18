@@ -1,5 +1,5 @@
 #!/bin/sh
-# Idempotent Lakekeeper setup: bootstrap the server once, then create the warehouse if missing.
+# Idempotentes Lakekeeper-Setup: Server einmal bootstrappen, dann das Warehouse anlegen, falls es fehlt.
 set -eu
 API=http://lakekeeper:8181/management/v1
 

@@ -1,4 +1,4 @@
-"""Raw zone on S3: files are stored byte-for-byte, with their source version as metadata."""
+"""Raw-Zone auf S3: Dateien werden byte-genau gespeichert, ihr Quellstand als Metadaten."""
 
 import hashlib
 from dataclasses import dataclass
@@ -61,7 +61,7 @@ class S3RawStore:
         )
 
     def is_current(self, key: str, remote: RemoteFile) -> bool:
-        """True if the stored object came from the same source version (Last-Modified + size)."""
+        """True, wenn das Objekt vom selben Quellstand stammt (Last-Modified + Größe)."""
         try:
             head = self._client.head_object(Bucket=self._bucket, Key=key)
         except ClientError as exc:
@@ -74,7 +74,7 @@ class S3RawStore:
         ) == str(remote.size)
 
     def put(self, key: str, body: bytes, remote: RemoteFile, run_id: str) -> None:
-        # A single PUT is atomic: readers see the old object or the new one, never a partial file.
+        # Ein einzelner PUT ist atomar: Leser sehen altes oder neues Objekt, nie eine halbe Datei.
         self._client.put_object(
             Bucket=self._bucket,
             Key=key,
@@ -106,7 +106,7 @@ def raw_key(kind: str, name: str) -> str:
 
 
 def raw_object(key: str, metadata: dict[str, str]) -> RawObject:
-    """Build a RawObject from the S3 user metadata written by `S3RawStore.put`."""
+    """Baut ein RawObject aus den S3-Metadaten, die `S3RawStore.put` schreibt."""
     return RawObject(
         key=key,
         kind=key.removeprefix(f"{RAW_PREFIX}/").split("/", 1)[0],
@@ -117,6 +117,6 @@ def raw_object(key: str, metadata: dict[str, str]) -> RawObject:
 
 
 def parse_listing_time(value: str) -> datetime:
-    """Parse the server listing time ("17-Jun-2026 10:15:08", seconds optional) as UTC."""
+    """Liest die Zeit der Verzeichnisliste ("17-Jun-2026 10:15:08", Sekunden optional) als UTC."""
     fmt = "%d-%b-%Y %H:%M:%S" if value.count(":") == 2 else "%d-%b-%Y %H:%M"
     return datetime.strptime(value, fmt).replace(tzinfo=UTC)

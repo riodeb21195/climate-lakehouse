@@ -9,7 +9,7 @@ from tests.conftest import HIST_ZIP, RECENT_ZIP, read_fixture
 
 
 def _rewrite(content: bytes, transform: dict[str, bytes | None]) -> bytes:
-    """Copy a real archive, replacing (bytes) or dropping (None) members by name prefix."""
+    """Kopiert ein echtes Archiv; ersetzt (bytes) oder entfernt (None) Einträge per Präfix."""
     source = zipfile.ZipFile(io.BytesIO(content))
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as target:

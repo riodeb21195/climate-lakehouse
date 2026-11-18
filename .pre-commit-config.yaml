@@ -1,4 +1,4 @@
-# Recorded source files must stay byte-identical.
+# Aufgezeichnete Quelldateien müssen byte-genau bleiben.
 exclude: ^tests/fixtures/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -8,7 +8,7 @@ repos:
         args: ["--maxkb=500"]
       - id: detect-private-key
       - id: check-yaml
-        # Compose merge tags (!override, !reset) are not plain YAML
+        # Compose-Merge-Tags (!override, !reset) sind kein reines YAML
         exclude: ^tests/integration/compose\.override\.yml$
       - id: end-of-file-fixer
       - id: trailing-whitespace

@@ -1,4 +1,4 @@
-"""Iceberg table definitions of all layers, and the MERGE used to write them."""
+"""Iceberg-Tabellen aller Schichten und das MERGE, mit dem sie geschrieben werden."""
 
 import uuid
 
@@ -16,7 +16,7 @@ GOLD_STATE_DECADE = "gold.state_decade"
 OPS_RUNS = "ops.pipeline_runs"
 OPS_CHECKS = "ops.quality_results"
 
-# Source columns of produkt_klima_tag (lower-cased) with their types; values stay as delivered.
+# Quellspalten von produkt_klima_tag (kleingeschrieben) mit Typ; Werte bleiben wie geliefert.
 BRONZE_MEASURES = {
     "qn_3": "INT",
     "fx": "DOUBLE",
@@ -36,7 +36,7 @@ BRONZE_MEASURES = {
     "tgk": "DOUBLE",
 }
 
-# bronze column -> silver column
+# Bronze-Spalte -> Silver-Spalte
 SILVER_MEASURES = {
     "qn_3": "qn_wind",
     "fx": "wind_gust_max_ms",
@@ -56,14 +56,14 @@ SILVER_MEASURES = {
     "tgk": "temp_min_ground_c",
 }
 
-# Yearly indicators per station; NULL where the year has too few observations for it.
+# Jahreskennzahlen je Station; NULL, wenn das Jahr dafür zu wenige Beobachtungen hat.
 GOLD_METRICS = {
     "heat_days": "INT",
     "frost_days": "INT",
     "heavy_rain_days": "INT",
     "sunshine_h": "DOUBLE",
     "temp_mean_c": "DOUBLE",
-    # Added after the first release; existing tables get it via `_add_missing_columns`.
+    # Nach dem ersten Release ergänzt; bestehende Tabellen über `_add_missing_columns`.
     "tropical_nights": "INT",
 }
 
@@ -81,8 +81,8 @@ DDL = [
     "CREATE NAMESPACE IF NOT EXISTS silver",
     "CREATE NAMESPACE IF NOT EXISTS gold",
     "CREATE NAMESPACE IF NOT EXISTS ops",
-    # Partitioned by source kind: the daily MERGE of the recent files only rewrites the small
-    # `recent` partition, the historical partition changes once a year.
+    # Partitioniert nach Quellart: Das tägliche MERGE der recent-Dateien schreibt nur die
+    # kleine `recent`-Partition um, die historische Partition ändert sich einmal im Jahr.
     f"""CREATE TABLE IF NOT EXISTS {BRONZE_DAILY} (
   station_id STRING NOT NULL,
   measure_date DATE NOT NULL,
@@ -111,7 +111,7 @@ DDL = [
   bronze_run_id STRING NOT NULL,
   loaded_at TIMESTAMP NOT NULL
 ) USING iceberg {_PROPS}""",
-    # One row per raw object version that bronze has fully loaded.
+    # Eine Zeile je Raw-Objektversion, die Bronze vollständig geladen hat.
     f"""CREATE TABLE IF NOT EXISTS {BRONZE_FILES} (
   source_key STRING NOT NULL,
   source_sha256 STRING NOT NULL,
@@ -121,7 +121,7 @@ DDL = [
   bronze_run_id STRING NOT NULL,
   loaded_at TIMESTAMP NOT NULL
 ) USING iceberg {_PROPS}""",
-    # Partitioned by year: daily updates only touch the last one or two years.
+    # Partitioniert nach Jahr: Tägliche Updates betreffen nur die letzten ein bis zwei Jahre.
     f"""CREATE TABLE IF NOT EXISTS {SILVER_DAILY} (
   station_id STRING NOT NULL,
   measure_date DATE NOT NULL,
@@ -153,8 +153,8 @@ DDL = [
   silver_run_id STRING NOT NULL,
   loaded_at TIMESTAMP NOT NULL
 ) USING iceberg {_PROPS}""",
-    # Partitioned by decade: an update rewrites the decades it touches as a whole, and the
-    # table stays at a few files per decade instead of one tiny file per year.
+    # Partitioniert nach Dekade: Ein Update schreibt die betroffenen Dekaden ganz neu, und die
+    # Tabelle bleibt bei wenigen Dateien je Dekade statt einer winzigen Datei je Jahr.
     f"""CREATE TABLE IF NOT EXISTS {GOLD_STATION_YEAR} (
   station_id STRING NOT NULL,
   state STRING NOT NULL,
@@ -195,15 +195,17 @@ DDL = [
 ]
 
 
-# Spark SQL cannot declare a sort order in CREATE TABLE. Sorted writes keep one open file per
-# task: unsorted, the MERGE into the year-partitioned silver table opened a Parquet writer per
-# year in every task and ran out of driver heap (2026-10-29, 50 stations, 1.5 GiB heap). Station
-# order also lets a query for a few stations skip most row groups.
+# Spark SQL kann in CREATE TABLE keine Sortierung festlegen. Sortiert schreiben hält eine
+# offene Datei je Task: Unsortiert öffnete das MERGE in die nach Jahr partitionierte
+# Silver-Tabelle in jedem Task einen Parquet-Writer je Jahr, bis der Driver-Heap voll war
+# (2026-10-29, 50 Stationen, 1,5 GiB Heap). Nach Station sortiert überspringt eine Abfrage für
+# wenige Stationen außerdem die meisten Row Groups.
 WRITE_ORDER = {SILVER_DAILY: "station_id, measure_date"}
 
 
-# Columns added after a table was first created. Iceberg adds a column as a metadata change:
-# no data file is rewritten, and old rows read as NULL until they are recomputed.
+# Spalten, die nach dem Anlegen einer Tabelle dazukamen. Iceberg ergänzt eine Spalte als reine
+# Metadatenänderung: Keine Datendatei wird neu geschrieben, alte Zeilen lesen sich als NULL,
+# bis sie neu berechnet werden.
 ADDED_COLUMNS = {
     GOLD_STATION_YEAR: {"tropical_nights": "INT"},
     GOLD_STATE_DECADE: {"tropical_nights": "DOUBLE", "tropical_nights_vs_1961_1990": "DOUBLE"},
@@ -224,7 +226,7 @@ def _add_missing_columns(spark: SparkSession) -> None:
         existing = set(spark.table(table).columns)
         missing = {name: t for name, t in columns.items() if name not in existing}
         if missing:
-            # Writers select the target's columns by name, so position does not matter.
+            # Die Writer wählen die Zielspalten per Name, die Position spielt keine Rolle.
             added = ", ".join(f"{name} {sql_type}" for name, sql_type in missing.items())
             spark.sql(f"ALTER TABLE {table} ADD COLUMNS ({added})")
 
@@ -237,11 +239,12 @@ def merge_rows(
     update_when: str = "t.row_hash <> s.row_hash",
     delete_unmatched_when: str | None = None,
 ) -> None:
-    """Upsert `source` into `target` in one atomic commit.
+    """Upsert von `source` nach `target` in einem atomaren Commit.
 
-    Rows are only rewritten when their content hash changed, so a repeated run commits no
-    changes. `delete_unmatched_when` limits deletes of target rows that are missing from the
-    source to the scope the source was computed for (e.g. the stations it covers).
+    Zeilen werden nur neu geschrieben, wenn sich ihr Inhalts-Hash geändert hat; ein doppelter
+    Lauf committet also nichts. `delete_unmatched_when` begrenzt das Löschen von Zielzeilen, die
+    in der Quelle fehlen, auf den Bereich, für den die Quelle berechnet wurde (z. B. ihre
+    Stationen).
     """
     view = f"merge_source_{uuid.uuid4().hex}"
     source.select(*spark.table(target).columns).createOrReplaceTempView(view)
@@ -260,13 +263,13 @@ def merge_rows(
 
 
 def row_hash(columns: list[str]) -> Column:
-    """Content hash of a row, compared by `merge_rows` to skip unchanged rows."""
+    """Inhalts-Hash einer Zeile; `merge_rows` überspringt damit unveränderte Zeilen."""
     values = [F.coalesce(F.col(c).cast("string"), F.lit("")) for c in columns]
     return F.sha2(F.concat_ws("|", *values), 256)
 
 
 def loaded_versions(spark: SparkSession) -> set[tuple[str, str]]:
-    """(key, SHA-256) of every raw object version that bronze has fully loaded."""
+    """(Key, SHA-256) jeder Raw-Objektversion, die Bronze vollständig geladen hat."""
     rows = spark.table(BRONZE_FILES).select("source_key", "source_sha256").collect()
     return {(row.source_key, row.source_sha256) for row in rows}
 
@@ -282,6 +285,6 @@ def set_property(spark: SparkSession, table: str, key: str, value: str) -> None:
 
 
 def max_timestamp(df: DataFrame, column: str) -> str | None:
-    """Latest value of a timestamp column at microsecond precision, usable as a watermark."""
+    """Größter Wert einer Zeitstempelspalte auf Mikrosekunden genau, nutzbar als Watermark."""
     first = df.select(F.date_format(F.max(column), "yyyy-MM-dd HH:mm:ss.SSSSSS")).first()
     return first[0] if first else None

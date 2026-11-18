@@ -1,10 +1,10 @@
-# Lets the test stack run next to a developer stack: random host ports, no fixed bindings.
+# Damit der Test-Stack neben einem Entwickler-Stack läuft: zufällige Host-Ports, keine festen.
 services:
   seaweedfs:
     ports: !override ["8333"]
   lakekeeper:
     ports: !reset []
-  # The job tests start the jobs directly; Airflow is covered by test_dag.py.
+  # Die Job-Tests starten die Jobs direkt; Airflow deckt test_dag.py ab.
   airflow-init: &off
     profiles: ["airflow"]
   airflow-api-server: *off

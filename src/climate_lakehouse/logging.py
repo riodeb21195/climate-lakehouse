@@ -1,4 +1,4 @@
-"""Structured JSON logging on top of the standard library."""
+"""Strukturiertes JSON-Logging auf Basis der Standardbibliothek."""
 
 import json
 import logging
@@ -6,7 +6,7 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-# Attributes every LogRecord has; anything else was passed via `extra=` and is logged as a field.
+# Attribute, die jeder LogRecord hat; alles andere kam über `extra=` und wird als Feld geloggt.
 _RESERVED = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
 
 

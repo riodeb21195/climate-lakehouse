@@ -88,8 +88,8 @@ def test_select_stations_round_robin_over_states() -> None:
 
 def test_select_stations_requires_reference_period_and_activity() -> None:
     stations = [
-        _station("00001", "Bayern", start=1970),  # misses reference period
-        _station("00002", "Bayern", end=2011),  # closed
+        _station("00001", "Bayern", start=1970),  # verfehlt die Referenzperiode
+        _station("00002", "Bayern", end=2011),  # geschlossen
         _station("00003", "Bayern"),
     ]
     assert select_stations(stations, 10, date(1961, 1, 1), date(2026, 9, 1)) == ["00003"]

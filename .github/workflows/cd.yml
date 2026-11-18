@@ -1,6 +1,6 @@
 name: CD
 
-# Publishes the pipeline image (Airflow + Spark jobs) after CI passed on main.
+# Pusht das Pipeline-Image (Airflow + Spark-Jobs), nachdem die CI auf main grün war.
 on:
   workflow_run:
     workflows: [CI]

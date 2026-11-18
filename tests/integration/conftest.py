@@ -1,8 +1,8 @@
-"""The compose stack shared by all integration tests.
+"""Der Compose-Stack, den sich alle Integrationstests teilen.
 
-It runs as its own compose project with random host ports, so a running developer stack is
-untouched. The jobs run inside the Docker network because Lakekeeper hands out its own S3
-endpoint (ADR 0002).
+Er läuft als eigenes Compose-Projekt mit zufälligen Host-Ports, ein laufender Entwickler-Stack
+bleibt also unberührt. Die Jobs laufen im Docker-Netz, weil Lakekeeper seinen eigenen
+S3-Endpunkt ausgibt (ADR 0002).
 """
 
 import subprocess
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parents[2]
-ENV_FILE = ROOT / ".env.example"  # documented defaults; the tests never read a real .env
+ENV_FILE = ROOT / ".env.example"  # dokumentierte Defaults; die Tests lesen nie eine echte .env
 COMPOSE = [
     "docker", "compose",
     "--project-name", "climate-lakehouse-it",
@@ -33,10 +33,10 @@ def compose(*args: str) -> subprocess.CompletedProcess[str]:
 
 @pytest.fixture(scope="session")
 def s3_endpoint() -> Iterator[str]:
-    """Start the stack once per test session; yields the host address of SeaweedFS."""
+    """Startet den Stack einmal je Testsitzung; liefert die Host-Adresse von SeaweedFS."""
     build = compose("--profile", "jobs", "build", "jobs")
     assert build.returncode == 0, build.stderr
-    # The one-shot bootstrap runs on its own: `up --wait` sometimes reports its exit as a failure.
+    # Das einmalige Bootstrap läuft separat: `up --wait` meldet sein Ende manchmal als Fehler.
     up = compose("up", "-d", "--wait", "seaweedfs", "lakekeeper")
     try:
         assert up.returncode == 0, up.stderr

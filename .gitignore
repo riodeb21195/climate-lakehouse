@@ -15,7 +15,7 @@ dist/
 build/
 *.egg-info/
 
-# Local Spark output
+# Lokale Spark-Ausgabe
 spark-warehouse/
 
 # IDE

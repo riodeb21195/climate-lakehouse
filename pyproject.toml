@@ -38,7 +38,7 @@ target-version = "py312"
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "N", "RUF"]
 
 [tool.ruff.lint.pep8-naming]
-# `from pyspark.sql import functions as F` is the PySpark convention
+# `from pyspark.sql import functions as F` ist PySpark-Konvention
 extend-ignore-names = ["F"]
 
 [tool.mypy]

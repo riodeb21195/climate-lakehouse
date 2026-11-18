@@ -1,1 +1,1 @@
-"""Climate lakehouse: DWD daily observations in a medallion architecture on Iceberg."""
+"""Climate Lakehouse: DWD-Tageswerte in einer Medallion-Architektur auf Iceberg."""

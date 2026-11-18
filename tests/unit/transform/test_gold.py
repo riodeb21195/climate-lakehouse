@@ -27,7 +27,7 @@ STATION_YEAR = (
 
 
 def _days(spark: SparkSession, year: int, count: int) -> DataFrame:
-    """`count` days from Jan 1: days 0-9 hot, 10-14 frosty, 15-17 heavy rain, 18 tropical."""
+    """`count` Tage ab 1. Januar: Tage 0-9 heiß, 10-14 Frost, 15-17 Starkregen, 18 Tropennacht."""
     rows = []
     for i in range(count):
         tmax = 31.0 if i < 10 else 15.0
@@ -48,7 +48,7 @@ def test_station_year_counts_threshold_days(spark: SparkSession) -> None:
     assert (full.heat_days, full.frost_days, full.heavy_rain_days) == (10, 5, 3)
     assert full.tropical_nights == 1
     assert (full.sunshine_h, full.temp_mean_c) == (5.0 * 366, 10.0)
-    # 100 observed days are too few: no indicator rather than a biased one
+    # 100 beobachtete Tage sind zu wenig: lieber keine Kennzahl als eine verzerrte
     partial = rows[2001]
     assert partial.days_observed == 100
     assert {partial.heat_days, partial.frost_days, partial.sunshine_h} == {None}
@@ -57,7 +57,7 @@ def test_station_year_counts_threshold_days(spark: SparkSession) -> None:
 def test_state_decade_compares_each_station_with_its_own_reference(spark: SparkSession) -> None:
     rows = [("A", "Bayern", y, 365, 5, 80, 2, 1700.0, 8.0, 0) for y in range(1961, 1991)]
     rows += [("A", "Bayern", y, 365, 15, 60, 4, 1900.0, 9.5, 2) for y in range(2010, 2020)]
-    # B opened in 2010 at a warmer site: it raises the decade mean but has no reference
+    # B öffnete 2010 an einem wärmeren Ort: hebt das Dekadenmittel, hat aber keine Referenz
     rows += [("B", "Bayern", y, 365, 25, 40, 4, 2000.0, 11.0, 6) for y in range(2010, 2020)]
 
     result = {
@@ -66,7 +66,7 @@ def test_state_decade_compares_each_station_with_its_own_reference(spark: SparkS
 
     recent = result[2010]
     assert (recent.state, recent.stations, recent.heat_days) == ("Bayern", 2, 20.0)
-    assert recent.heat_days_vs_1961_1990 == 10.0  # station A only: 15 - 5
+    assert recent.heat_days_vs_1961_1990 == 10.0  # nur Station A: 15 - 5
     assert recent.temp_mean_c_vs_1961_1990 == 1.5
     assert recent.tropical_nights_vs_1961_1990 == 2.0
     assert result[1980].heat_days_vs_1961_1990 == 0.0

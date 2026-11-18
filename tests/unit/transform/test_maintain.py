@@ -22,7 +22,7 @@ from tests.unit.transform.conftest import MemoryRawReader
 def test_compaction_merges_small_files_without_changing_rows(
     spark: SparkSession, settings: Settings, raw: MemoryRawReader
 ) -> None:
-    # one MERGE commit per file: the recent partition ends up in several small files
+    # ein MERGE-Commit je Datei: Die recent-Partition landet in mehreren kleinen Dateien
     run_bronze(spark, settings.model_copy(update={"bronze_batch_files": 1}), raw)
     rows = spark.table(BRONZE_DAILY).count()
     before = data_files(spark, BRONZE_DAILY)
@@ -30,9 +30,9 @@ def test_compaction_merges_small_files_without_changing_rows(
     summary = run_maintain(spark, settings)
 
     bronze = next(t for t in summary.tables if t.table == BRONZE_DAILY)
-    assert (bronze.files_before, bronze.files_after) == (before, 2)  # one per source kind
+    assert (bronze.files_before, bronze.files_after) == (before, 2)  # eine je Quellart
     assert spark.table(BRONZE_DAILY).count() == rows
-    # a second run finds nothing to rewrite
+    # ein zweiter Lauf findet nichts zum Umschreiben
     again = next(t for t in run_maintain(spark, settings).tables if t.table == BRONZE_DAILY)
     assert (again.rewritten, again.added) == (0, 0)
 
@@ -44,11 +44,11 @@ def test_rollback_restores_the_table_before_a_bad_write(
     run_silver(spark, settings)
     run_gold(spark, settings)
     good = sorted(spark.table(GOLD_STATE_DECADE).select("state", "decade", "heat_days").collect())
-    time.sleep(1)  # snapshot timestamps have millisecond precision; keep the two apart
+    time.sleep(1)  # Snapshot-Zeitstempel sind millisekundengenau; die beiden auseinanderhalten
     before_bad_write = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
     time.sleep(1)
 
-    # a faulty run overwrites the table with wrong numbers
+    # ein fehlerhafter Lauf überschreibt die Tabelle mit falschen Zahlen
     spark.sql(f"UPDATE {GOLD_STATE_DECADE} SET heat_days = heat_days + 100")
     summary = rollback(spark, GOLD_STATE_DECADE, before_bad_write)
 
@@ -58,7 +58,7 @@ def test_rollback_restores_the_table_before_a_bad_write(
 
 
 def test_new_gold_column_is_added_to_an_existing_table(spark: SparkSession) -> None:
-    # gold.station_year as created before tropical_nights existed
+    # gold.station_year, wie es vor tropical_nights angelegt wurde
     spark.sql("CREATE NAMESPACE IF NOT EXISTS gold")
     spark.sql(
         f"""CREATE TABLE {GOLD_STATION_YEAR} (station_id STRING NOT NULL, state STRING NOT NULL,
@@ -78,7 +78,7 @@ def test_new_gold_column_is_added_to_an_existing_table(spark: SparkSession) -> N
     row = spark.table(GOLD_STATION_YEAR).first()
     assert row is not None
     assert (row.heat_days, row.tropical_nights) == (20, None)
-    assert data_files(spark, GOLD_STATION_YEAR) == files  # metadata change only
+    assert data_files(spark, GOLD_STATION_YEAR) == files  # nur Metadatenänderung
     assert "tropical_nights_vs_1961_1990" in spark.table(GOLD_STATE_DECADE).columns
 
 

@@ -17,7 +17,7 @@ DRESDEN_RECENT_KEY = raw_key("recent", DRESDEN_RECENT_ZIP)
 
 
 def _edit_product(content: bytes, old: bytes, new: bytes) -> bytes:
-    """Copy a real archive with one byte sequence of the product file replaced."""
+    """Kopiert ein echtes Archiv mit einer ersetzten Bytefolge in der Produktdatei."""
     source = zipfile.ZipFile(io.BytesIO(content))
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as target:
@@ -37,7 +37,7 @@ def test_parse_product_keeps_values_and_missing_markers() -> None:
     first = rows.iloc[0]
     assert (first.station_id, first.measure_date) == ("01048", date(1945, 2, 22))
     assert (first.tmk, first.txk, first.tnk, first.rsk) == (2.4, 4.5, -0.9, 0.5)
-    assert first.sdk == -999  # sunshine not measured in 1945: kept as delivered
+    assert first.sdk == -999  # Sonnenschein 1945 nicht gemessen: bleibt wie geliefert
     assert str(rows.dtypes["qn_4"]) == "Int32"
 
 
@@ -50,7 +50,7 @@ def test_parse_product_rejects_non_numeric_value() -> None:
 def test_loads_all_files_once(
     spark: SparkSession, settings: Settings, raw: MemoryRawReader
 ) -> None:
-    settings = settings.model_copy(update={"bronze_batch_files": 3})  # 4 archives: 2 batches
+    settings = settings.model_copy(update={"bronze_batch_files": 3})  # 4 Archive: 2 Batches
     first = run_bronze(spark, settings, raw)
 
     assert (first.files_seen, first.files_loaded, first.files_skipped) == (5, 5, 0)
@@ -77,7 +77,7 @@ def test_changed_file_updates_only_changed_rows(
     run_bronze(spark, settings, raw)
     first_run = spark.table(BRONZE_DAILY).select("bronze_run_id").first()[0]  # type: ignore[index]
 
-    # DWD corrects one value in the next version of the recent file
+    # Der DWD korrigiert einen Wert in der nächsten Version der recent-Datei
     body = raw.objects[DRESDEN_RECENT_KEY][0]
     corrected = _edit_product(body, b"1048;20251220;   10;   5.8;", b"1048;20251220;   10;   6.1;")
     raw.put(DRESDEN_RECENT_KEY, corrected, FIXTURE_TIME + timedelta(days=1))

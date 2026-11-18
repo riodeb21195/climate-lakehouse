@@ -1,8 +1,9 @@
-"""Bronze: every DWD file version from the raw zone, parsed into Iceberg with values as delivered.
+"""Bronze: jede DWD-Dateiversion aus der Raw-Zone, nach Iceberg geparst, Werte wie geliefert.
 
-A raw object is loaded once per content version (key + SHA-256, recorded in bronze.dwd_files),
-so a repeated run reads nothing. Files are loaded in batches; each batch is one MERGE commit,
-which makes an interrupted run resumable and a re-loaded batch a no-op.
+Ein Raw-Objekt wird je Inhaltsversion einmal geladen (Key + SHA-256, festgehalten in
+bronze.dwd_files), ein doppelter Lauf liest also nichts. Dateien werden in Batches geladen,
+jeder Batch ist ein MERGE-Commit. Ein abgebrochener Lauf lässt sich so fortsetzen, ein erneut
+geladener Batch ändert nichts.
 """
 
 import io
@@ -48,7 +49,7 @@ _PARSED_SCHEMA = (
 
 
 @dataclass(kw_only=True)
-class BronzeSummary(JobSummary):  # no checks: bronze validates per file instead
+class BronzeSummary(JobSummary):  # keine Checks: Bronze prüft jede Datei
     finished_at: datetime | None = None
     files_seen: int = 0
     files_skipped: int = 0
@@ -62,9 +63,9 @@ class BronzeSummary(JobSummary):  # no checks: bronze validates per file instead
 
 
 def parse_product(content: bytes) -> pd.DataFrame:
-    """Read the produkt_klima_tag file of a daily-KL archive into typed columns.
+    """Liest die produkt_klima_tag-Datei eines Tages-KL-Archivs in typisierte Spalten.
 
-    Missing values keep the DWD marker -999; translating them is a silver concern.
+    Fehlwerte behalten die DWD-Kennung -999; die Übersetzung ist Aufgabe von Silver.
     """
     with zipfile.ZipFile(io.BytesIO(content)) as archive:
         member = next(m for m in archive.namelist() if PRODUCT_MEMBER.match(m))
@@ -117,8 +118,8 @@ def run_bronze(
 def _load_daily_batch(
     spark: SparkSession, raw: RawReader, batch: list[RawObject], run_id: str
 ) -> int:
-    # Parsing an archive takes milliseconds with pandas, so it runs on the driver and reaches
-    # Spark through Arrow; Python workers would cost more to start than the parsing itself.
+    # pandas parst ein Archiv in Millisekunden, deshalb läuft das im Driver und geht per Arrow
+    # an Spark; Python-Worker bräuchten länger zum Starten als das Parsen selbst.
     frames = []
     counts = {}
     for obj in batch:
@@ -136,7 +137,7 @@ def _load_daily_batch(
         counts[obj.key] = len(frame)
 
     parsed = (
-        # Via a pyarrow Table: pandas 3 string columns break Spark's own pandas conversion.
+        # Über eine pyarrow-Table: String-Spalten von pandas 3 brechen Sparks eigene Konvertierung.
         spark.createDataFrame(
             pa.Table.from_pandas(pd.concat(frames, ignore_index=True), preserve_index=False),
             _PARSED_SCHEMA,
@@ -152,7 +153,7 @@ def _load_daily_batch(
             BRONZE_DAILY,
             _latest_per_key(parsed),
             DAILY_KEYS,
-            # An older file version (e.g. a stale copy loaded late) never overwrites a newer one.
+            # Eine ältere Dateiversion (z. B. spät geladene Kopie) überschreibt nie eine neuere.
             update_when="t.row_hash <> s.row_hash AND s.source_modified_at >= t.source_modified_at",
         )
         _record_files(spark, [(o, counts[o.key]) for o in batch], run_id)
@@ -162,7 +163,10 @@ def _load_daily_batch(
 
 
 def _latest_per_key(rows: DataFrame) -> DataFrame:
-    """Keep one row per key; a batch can hold two versions of the same file (renamed archive)."""
+    """Behält eine Zeile je Schlüssel.
+
+    Ein Batch kann zwei Versionen derselben Datei enthalten (umbenanntes Archiv).
+    """
     window = Window.partitionBy(*DAILY_KEYS).orderBy(F.col("source_modified_at").desc())
     return rows.withColumn("_rank", F.row_number().over(window)).where("_rank = 1").drop("_rank")
 
@@ -187,7 +191,7 @@ def _load_stations(spark: SparkSession, raw: RawReader, obj: RawObject, run_id: 
         F.lit(run_id).alias("bronze_run_id"),
         F.current_timestamp().alias("loaded_at"),
     )
-    # The list is small and always complete, so each new version replaces the table.
+    # Die Liste ist klein und immer vollständig, jede neue Version ersetzt also die Tabelle.
     frame.writeTo(BRONZE_STATIONS).overwrite(F.lit(True))
     return len(rows)
 

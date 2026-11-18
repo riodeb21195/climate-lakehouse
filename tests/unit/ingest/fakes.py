@@ -24,7 +24,7 @@ class MemoryStore:
 
 
 def dwd_transport(overrides: dict[str, bytes] | None = None) -> httpx.MockTransport:
-    """Serve the recorded DWD fixtures; 00044 is listed but its archive is missing (404)."""
+    """Liefert die aufgezeichneten DWD-Fixtures; 00044 ist gelistet, das Archiv fehlt (404)."""
     routes = {
         f"{BASE}/historical/": read_fixture("listing_historical.html"),
         f"{BASE}/recent/": read_fixture("listing_recent.html"),
